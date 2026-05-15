@@ -12,6 +12,7 @@ const leaveRoutes = require("./routes/leave.routes");
 const attendanceRoutes =require("./routes/attendance.routes");
 const payrollRoutes =require("./routes/payroll.routes");
 const taskRoutes = require("./routes/task.routes");
+const employerRoutes=require("./routes/employer.routes");
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -25,6 +26,7 @@ app.use("/api/leaves", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/employer",employerRoutes);
 // Test Route
 app.get("/", (req, res) => {
   res.send("Server is working");
