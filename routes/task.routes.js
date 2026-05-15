@@ -6,7 +6,7 @@ const {
   updateTaskStatus,
   getMyTasks,
   getAllTasks,
-} = require("../controllers/taskController");
+} = require("../controllers/taskControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");

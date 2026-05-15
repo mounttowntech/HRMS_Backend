@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
-const User = require("../models/User");
-const Employee = require("../models/Employee");
-const Onboarding = require("../models/Onboarding");
+const User = require("../model/userModel");
+const Employee = require("../model/employeeModel");
+const Onboarding = require("../model/onBoardingModel");
 
 const generateEmployeeCode = async () => {
   const count = await Employee.countDocuments();

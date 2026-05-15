@@ -1,5 +1,5 @@
-const Payroll = require("../models/Payroll");
-const Employee = require("../models/Employee");
+const Payroll = require("../model/payRollModel");
+const Employee = require("../model/employeeModel");
 
 exports.generatePayroll = async (req, res) => {
   try {

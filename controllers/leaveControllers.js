@@ -1,11 +1,11 @@
-const Leave = require("../models/Leave");
-const Employee = require("../models/Employee");
+const Leave = require("../model/leaveModel");
+const Employee = require("../model/employeeModel");
 
 const leaveKeyMap = {
-  "Paid Leave": "paidLeave",
+  "Casual Leave": "paidLeave",
   "Sick Leave": "sickLeave",
-  "Planned Leave": "plannedLeave",
-  "Unplanned Leave": "unplannedLeave",
+  "Maternity Leave": "maternityLeave",
+  "Paternity Leave": "paternityLeave",
 };
 
 exports.applyLeave = async (req, res) => {

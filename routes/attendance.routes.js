@@ -6,7 +6,7 @@ const {
   punchOut,
   getMyAttendance,
   getAllAttendance,
-} = require("../controllers/attendanceController");
+} = require("../controllers/attendanceControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");

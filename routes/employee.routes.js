@@ -5,7 +5,7 @@ const {
   createEmployee,
   getAllEmployees,
   getMyProfile,
-} = require("../controllers/employeeController");
+} = require("../controllers/employeeControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");

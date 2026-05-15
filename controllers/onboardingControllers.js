@@ -1,5 +1,5 @@
-const Employee = require("../models/Employee");
-const Onboarding = require("../models/Onboarding");
+const Employee = require("../model/employeeModel");
+const Onboarding = require("../model/onBoardingModel");
 
 exports.updateOnboardingStatus = async (req, res) => {
   try {
