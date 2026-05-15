@@ -1,5 +1,5 @@
-const Attendance = require("../models/Attendance");
-const Employee = require("../models/Employee");
+const Attendance = require("../model/attendanceModel");
+const Employee = require("../model/employeeModel");
 
 exports.punchIn = async (req, res) => {
   try {

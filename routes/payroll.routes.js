@@ -5,7 +5,7 @@ const {
   generatePayroll,
   getMyPayslips,
   getAllPayrolls,
-} = require("../controllers/payrollController");
+} = require("../controllers/payrollControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");

@@ -8,7 +8,7 @@ const {
   rejectLeave,
   getMyLeaves,
   getAllLeaves,
-} = require("../controllers/leaveController");
+} = require("../controllers/leaveControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");

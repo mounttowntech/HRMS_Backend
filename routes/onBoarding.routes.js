@@ -6,7 +6,7 @@ const {
   uploadDocuments,
   assignSystemAccess,
   getOnboardingByEmployee,
-} = require("../controllers/onboardingController");
+} = require("../controllers/onboardingControllers");
 
 const { verifyToken } = require("../middleware/authMiddleware");
 const { allowRoles } = require("../middleware/roleMiddleware");
