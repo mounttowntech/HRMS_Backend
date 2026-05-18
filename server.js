@@ -1,53 +1,35 @@
-const express = require("express");
-const dotenv = require("dotenv");
-const cors = require("cors");
+require("dotenv").config();
+
 const mongoose = require("mongoose");
+const app = require("./app");
 
-dotenv.config();
 
-const app = express();
-const employeeRoutes =require("./routes/employee.routes");
-const onboardingRoutes =require("./routes/onBoarding.routes");
-const leaveRoutes = require("./routes/leave.routes");
-const attendanceRoutes =require("./routes/attendance.routes");
-const payrollRoutes =require("./routes/payroll.routes");
-const taskRoutes = require("./routes/task.routes");
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cors());
 
-// Routes 
-
-app.use("/api/employees", employeeRoutes);
-app.use("/api/onboarding", onboardingRoutes);
-app.use("/api/leaves", leaveRoutes);
-app.use("/api/attendance", attendanceRoutes);
-app.use("/api/payroll", payrollRoutes);
-app.use("/api/tasks", taskRoutes);
-// Test Route
-app.get("/", (req, res) => {
-  res.send("Server is working");
-});
-
-// DATABASE
 const mongoURI =
   process.env.NODE_ENV === "production"
     ? process.env.MONGODB_ATLAS
     : process.env.MONGODB_LOCAL;
+
+if (!mongoURI) {
+  console.log("❌ MongoDB URI missing");
+  console.log("NODE_ENV:", process.env.NODE_ENV);
+  console.log("MONGODB_LOCAL:", process.env.MONGODB_LOCAL);
+  console.log("MONGODB_ATLAS:", process.env.MONGODB_ATLAS);
+  process.exit(1);
+}
 
 mongoose
   .connect(mongoURI)
   .then(() => {
     console.log("✅ MongoDB Connected");
 
-    const PORT = process.env.PORT || 8000;
+    const PORT = process.env.PORT || 5000;
 
-    // ✅ FIXED
     app.listen(PORT, () => {
       console.log(`🚀 Server running on ${PORT}`);
     });
   })
   .catch((err) => {
-    console.log(err.message);
+    console.log("❌ MongoDB Error:", err.message);
   });
+  
