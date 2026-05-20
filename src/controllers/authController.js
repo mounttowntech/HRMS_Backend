@@ -1,17 +1,21 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Company = require("../models/Company");
-const token = (u) =>
-  jwt.sign(
+const generateToken = (user) => {
+  return jwt.sign(
     {
-      id: u._id,
-      companyId: u.companyId,
-      employeeId: u.employeeId,
-      role: u.role,
+      id: user._id,
+      role: user.role,
+      email: user.email,
+      companyId: user.companyId,
+      employeeId: user.employeeId,
     },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRE || "7d" },
+    {
+      expiresIn: "7d",
+    }
   );
+};
 exports.registerEmployer = async (req, res) => {
   try {
     const { name, email, phone, password, companyName, industryType } =
@@ -45,21 +49,52 @@ exports.registerEmployer = async (req, res) => {
     res.status(500).json({ success: false, message: e.message });
   }
 };
+
+
+
+
+// LOGIN
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email: email?.toLowerCase() });
-    if (!user || !(await user.comparePassword(password)))
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid credentials" });
-    if (!user.isActive)
-      return res
-        .status(403)
-        .json({ success: false, message: "Account disabled" });
+    const email = req.body.email?.trim().toLowerCase();
+    const password = req.body.password?.trim();
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const isMatch = await user.comparePassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Wrong password",
+      });
+    }
+
+    if (!user.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: "Account disabled",
+      });
+    }
+
     user.lastLoginAt = new Date();
     await user.save();
-    const m = {
+
+    const redirectMap = {
       employer: "/employer/dashboard",
       admin: "/admin/dashboard",
       hr: "/hr/dashboard",
@@ -67,10 +102,11 @@ exports.login = async (req, res) => {
       teamlead: "/teamlead/dashboard",
       projectmanager: "/project-manager/dashboard",
     };
-    res.json({
+
+    return res.status(200).json({
       success: true,
       message: "Login success",
-      token: token(user),
+      token: generateToken(user),
       user: {
         id: user._id,
         companyId: user.companyId,
@@ -79,10 +115,50 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
       },
-      redirectTo: m[user.role],
+      redirectTo: redirectMap[user.role],
     });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// RESET PASSWORD TEMPORARY
+exports.resetPassword = async (req, res) => {
+  try {
+    const email = req.body.email?.trim().toLowerCase();
+    const newPassword = req.body.password?.trim();
+
+    if (!email || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 exports.me = async (req, res) =>

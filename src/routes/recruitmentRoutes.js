@@ -1,40 +1,52 @@
 const router = require("express").Router();
-const c = require("../controllers/recruitmentController");
-const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
+
+const recruitmentController = require("../controllers/recruitmentController");
+
+const {
+  verifyToken,
+  allowRoles,
+} = require("../middleware/authMiddleware");
+
 router.post(
   "/jobs",
   verifyToken,
   allowRoles("employer", "admin", "hr"),
-  c.createJobPost,
+  recruitmentController.createJobPost
 );
+
 router.post(
   "/candidates",
   verifyToken,
   allowRoles("employer", "admin", "hr"),
-  c.applyCandidate,
+  recruitmentController.applyCandidate
 );
-router.patch(
+
+router.put(
   "/candidates/:candidateId/resume-screening",
   verifyToken,
-  allowRoles("hr", "admin"),
-  c.resumeScreening,
+  allowRoles("employer", "hr", "admin"),
+  recruitmentController.resumeScreening
 );
+
 router.patch(
   "/candidates/:candidateId/hr-interview",
   verifyToken,
-  allowRoles("hr", "admin"),
-  c.hrInterview,
+  allowRoles("employer", "hr", "admin"),
+  recruitmentController.hrInterview
 );
+
 router.patch(
   "/candidates/:candidateId/technical-round",
   verifyToken,
-  allowRoles("hr", "admin", "projectmanager", "teamlead"),
-  c.technicalRound,
+  allowRoles("employer", "hr", "admin", "projectmanager", "teamlead"),
+  recruitmentController.technicalRound
 );
+
 router.post(
   "/candidates/:candidateId/create-employee",
   verifyToken,
-  allowRoles("hr", "admin"),
-  c.createEmployeeFromCandidate,
+  allowRoles("employer", "hr", "admin"),
+  recruitmentController.createEmployeeFromCandidate
 );
+
 module.exports = router;

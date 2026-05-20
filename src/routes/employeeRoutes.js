@@ -2,19 +2,19 @@ const router = require("express").Router();
 const c = require("../controllers/employeeController");
 const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 router.post(
-  "/",
+  "/create",
   verifyToken,
   allowRoles("employer", "admin", "hr"),
   c.createEmployee,
 );
 router.post(
-  "/:employeeId/create-login",
+  "/create-login/:employeeId",
   verifyToken,
   allowRoles("employer", "admin", "hr"),
   c.createEmployeeLogin,
 );
 router.get(
-  "/",
+  "/all",
   verifyToken,
   allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
   c.getEmployees,

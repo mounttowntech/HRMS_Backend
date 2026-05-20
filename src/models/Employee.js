@@ -1,48 +1,73 @@
 const mongoose = require("mongoose");
-const schema = new mongoose.Schema(
+
+const employeeSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
     },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    employeeCode: { type: String, unique: true },
-    fullName: { type: String, required: true },
-    email: { type: String, required: true, lowercase: true },
+
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    employeeCode: {
+      type: String,
+      unique: true,
+    },
+
+    fullName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    email: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trim: true,
+    },
+
     phone: String,
-    department: String,
+
     designation: String,
+
+    department: String,
+
+    salary: {
+      type: Number,
+      default: 0,
+    },
+
     role: {
       type: String,
-      enum: ["admin", "hr", "employee", "teamlead", "projectmanager"],
+      enum: ["employee", "hr", "admin", "teamlead", "projectmanager"],
       default: "employee",
     },
-    reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    projectManager: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    joiningDate: Date,
-    salary: { type: Number, default: 0 },
-    shift: String,
-    processName: String,
+
+    reportingManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+
+    projectManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      default: null,
+    },
+
     status: {
       type: String,
-      enum: [
-        "candidate_selected",
-        "onboarding",
-        "active",
-        "inactive",
-        "offboarding",
-        "offboarded",
-      ],
-      default: "candidate_selected",
-    },
-    leaveBalance: {
-      paid: { type: Number, default: 12 },
-      sick: { type: Number, default: 10 },
-      casual: { type: Number, default: 10 },
+      enum: ["pending", "onboarding", "active", "inactive", "terminated"],
+      default: "pending",
     },
   },
   { timestamps: true },
 );
-schema.index({ companyId: 1, email: 1 }, { unique: true });
-module.exports = mongoose.model("Employee", schema);
+
+module.exports = mongoose.model("Employee", employeeSchema);

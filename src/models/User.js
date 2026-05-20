@@ -1,13 +1,39 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const schema = new mongoose.Schema(
+
+const userSchema = new mongoose.Schema(
   {
-    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    name: { type: String, required: true },
-    email: { type: String, required: true, lowercase: true, unique: true },
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+    },
+
+    employeeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+    },
+
+    name: {
+      type: String,
+      required: true,
+    },
+
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+
     phone: String,
-    password: { type: String, required: true },
+
+    password: {
+      type: String,
+      required: true,
+      select: false,
+    },
+
     role: {
       type: String,
       enum: [
@@ -20,17 +46,27 @@ const schema = new mongoose.Schema(
       ],
       default: "employee",
     },
-    isActive: { type: Boolean, default: true },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
     lastLoginAt: Date,
   },
-  { timestamps: true },
+  { timestamps: true }
 );
-schema.pre("save", async function (next) {
-  if (!this.isModified("password")) return next();
+
+// Hash password before save
+userSchema.pre("save", async function () {
+  if (!this.isModified("password")) return;
+
   this.password = await bcrypt.hash(this.password, 10);
-  next();
 });
-schema.methods.comparePassword = function (p) {
-  return bcrypt.compare(p, this.password);
+
+// Compare password
+userSchema.methods.comparePassword = async function (enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
 };
-module.exports = mongoose.model("User", schema);
+
+module.exports = mongoose.model("User", userSchema);
