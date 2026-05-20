@@ -4,7 +4,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.get("/", (req, res) => res.json({ success: true, message: "HRMS Complete Workflow API working" }));
+app.use("/uploads", express.static("uploads"));
+app.get("/", (req, res) =>
+  res.json({ success: true, message: "HRMS Complete Workflow API working" }),
+);
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/company", require("./src/routes/companyRoutes"));
 app.use("/api/roles", require("./src/routes/roleRoutes"));

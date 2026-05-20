@@ -1,12 +1,25 @@
-const router = require("express").Router();
-const c = require("../controllers/documentController");
-const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
-router.post("/upload", verifyToken, c.uploadDocument);
-router.patch(
-  "/:id/verify",
+const express = require("express");
+const router = express.Router();
+
+const upload = require("../middleware/upload");
+
+const {
+  uploadDocument,
+  verifyDocument,
+  getDocuments,
+} = require("../controllers/documentController");
+
+const { verifyToken } = require("../middleware/authMiddleware");
+
+router.post(
+  "/upload",
   verifyToken,
-  allowRoles("hr", "admin"),
-  c.verifyDocument,
+  upload.single("document"),
+  uploadDocument
 );
-router.get("/", verifyToken, c.getDocuments);
+
+router.put("/verify/:id", verifyToken, verifyDocument);
+
+router.get("/all", verifyToken, getDocuments);
+
 module.exports = router;

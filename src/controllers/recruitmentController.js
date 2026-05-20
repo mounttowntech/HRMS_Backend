@@ -1,6 +1,8 @@
 const JobPost = require("../models/JobPost");
 const Candidate = require("../models/Candidate");
 const Employee = require("../models/Employee");
+const sendMail = require("../utils/sendMail");
+const offerLetterTemplate = require("../templates/offerLetterTemplate");
 exports.createJobPost = async (req, res) =>
   res
     .status(201)
@@ -25,17 +27,51 @@ exports.applyCandidate = async (req, res) =>
         status: "applied",
       }),
     });
+ 
+
 exports.resumeScreening = async (req, res) => {
-  const status = req.body.selected ? "hr_interview" : "screening_rejected";
-  res.json({
-    success: true,
-    message: status,
-    candidate: await Candidate.findOneAndUpdate(
-      { _id: req.params.candidateId, companyId: req.user.companyId },
+  try {
+    const { selected } = req.body;
+
+    if (typeof selected !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "selected must be true or false",
+      });
+    }
+
+    const status = selected ? "hr_interview" : "screening_rejected";
+
+    const candidate = await Candidate.findOneAndUpdate(
+      {
+        _id: req.params.candidateId,
+        companyId: req.user.companyId,
+      },
       { status },
-      { new: true },
-    ),
-  });
+      { new: true }
+    );
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message:
+        selected
+          ? "Candidate moved to HR interview"
+          : "Candidate rejected in resume screening",
+      candidate,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 exports.hrInterview = async (req, res) => {
   const passed = req.body.passed;
@@ -56,12 +92,14 @@ exports.hrInterview = async (req, res) => {
   });
 };
 exports.technicalRound = async (req, res) => {
-  const passed = req.body.passed;
-  res.json({
-    success: true,
-    message: passed ? "Candidate selected" : "Candidate rejected",
-    candidate: await Candidate.findOneAndUpdate(
-      { _id: req.params.candidateId, companyId: req.user.companyId },
+  try {
+    const passed = req.body.passed;
+
+    const candidate = await Candidate.findOneAndUpdate(
+      {
+        _id: req.params.candidateId,
+        companyId: req.user.companyId,
+      },
       {
         status: passed ? "selected" : "technical_rejected",
         technicalRound: {
@@ -69,45 +107,98 @@ exports.technicalRound = async (req, res) => {
           remarks: req.body.remarks,
         },
       },
-      { new: true },
-    ),
-  });
+      { new: true }
+    );
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    if (passed) {
+      await sendMail({
+        to: candidate.email,
+        subject: "Offer Letter",
+        html: offerLetterTemplate(
+          candidate.fullName,
+          req.body.designation,
+          req.body.joiningDate,
+          "Mounttown Technologies"
+        ),
+      });
+    }
+
+    res.json({
+      success: true,
+      message: passed
+        ? "Candidate selected and offer letter sent"
+        : "Candidate rejected",
+      candidate,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 exports.createEmployeeFromCandidate = async (req, res) => {
-  const c = await Candidate.findOne({
-    _id: req.params.candidateId,
-    companyId: req.user.companyId,
-  });
-  if (!c)
-    return res
-      .status(404)
-      .json({ success: false, message: "Candidate not found" });
-  if (c.status !== "selected")
-    return res
-      .status(400)
-      .json({ success: false, message: "Candidate not selected" });
-  const count = await Employee.countDocuments({
-    companyId: req.user.companyId,
-  });
-  const emp = await Employee.create({
-    companyId: req.user.companyId,
-    employeeCode: `EMP${String(count + 1).padStart(4, "0")}`,
-    fullName: c.fullName,
-    email: c.email,
-    phone: c.phone,
-    department: req.body.department,
-    designation: req.body.designation,
-    role: req.body.role || "employee",
-    salary: req.body.salary || 0,
-    status: "candidate_selected",
-  });
-  c.status = "employee_created";
-  await c.save();
-  res
-    .status(201)
-    .json({
+  try {
+    const c = await Candidate.findOne({
+      _id: req.params.candidateId,
+      companyId: req.user.companyId,
+    });
+
+    if (!c) {
+      return res.status(404).json({
+        success: false,
+        message: "Candidate not found",
+      });
+    }
+
+    if (c.status !== "selected") {
+      return res.status(400).json({
+        success: false,
+        message: "Candidate not selected",
+      });
+    }
+
+    const count = await Employee.countDocuments({
+      companyId: req.user.companyId,
+    });
+
+    const emp = await Employee.create({
+      companyId: req.user.companyId,
+
+      // Use this only if employeeCode exists in Employee schema
+      employeeCode: `EMP${String(count + 1).padStart(4, "0")}`,
+
+      fullName: c.fullName,
+      email: c.email,
+      phone: c.phone,
+      department: req.body.department,
+      designation: req.body.designation,
+      role: req.body.role || "employee",
+      salary: req.body.salary || 0,
+
+      // FIXED
+      status: "pending",
+    });
+
+    c.status = "employee_created";
+    await c.save();
+
+    res.status(201).json({
       success: true,
       message: "Employee created from candidate",
       employee: emp,
     });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };

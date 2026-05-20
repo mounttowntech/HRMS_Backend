@@ -4,20 +4,20 @@ const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 router.post(
   "/:employeeId/start",
   verifyToken,
-  allowRoles("hr", "admin"),
+  allowRoles("employer","hr", "admin"),
   c.startOnboarding,
 );
-router.patch("/:employeeId/step", verifyToken, c.updateStep);
+router.put("/:employeeId/step", verifyToken, c.updateStep);
 router.patch(
   "/:employeeId/hr-verify",
   verifyToken,
-  allowRoles("hr", "admin"),
+  allowRoles("employer","hr", "admin"),
   c.hrVerify,
 );
 router.post(
   "/:employeeId/activate",
   verifyToken,
-  allowRoles("admin", "hr"),
+  allowRoles("employer","admin", "hr"),
   c.assignAdminAccessAndActivate,
 );
 module.exports = router;

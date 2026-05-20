@@ -2,38 +2,61 @@ const Onboarding = require("../models/Onboarding");
 const Employee = require("../models/Employee");
 const User = require("../models/User");
 const sendMail = require("../utils/sendMail");
+const onboardingStartedTemplate = require("../templates/onboardingStartedTemplate");
+const hrVerificationCompletedTemplate = require("../templates/hrVerificationCompletedTemplate");
 exports.startOnboarding = async (req, res) => {
-  const emp = await Employee.findOne({
-    _id: req.params.employeeId,
-    companyId: req.user.companyId,
-  });
-  if (!emp)
-    return res
-      .status(404)
-      .json({ success: false, message: "Employee not found" });
-  emp.status = "onboarding";
-  await emp.save();
-  const onboarding = await Onboarding.findOneAndUpdate(
-    { companyId: req.user.companyId, employeeId: emp._id },
-    {
+  try {
+    const emp = await Employee.findOne({
+      _id: req.params.employeeId,
       companyId: req.user.companyId,
-      employeeId: emp._id,
-      status: "started",
-      welcomeCompleted: true,
-    },
-    { new: true, upsert: true },
-  );
-  await sendMail({
-    to: emp.email,
-    subject: "Onboarding Started",
-    html: `<h3>Welcome ${emp.fullName}</h3>`,
-  });
-  res.json({
-    success: true,
-    message: "Email sent and onboarding started",
-    onboarding,
-  });
+    });
+
+    if (!emp) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    emp.status = "onboarding";
+    await emp.save();
+
+    const onboarding = await Onboarding.findOneAndUpdate(
+      {
+        companyId: req.user.companyId,
+        employeeId: emp._id,
+      },
+      {
+        companyId: req.user.companyId,
+        employeeId: emp._id,
+        status: "started",
+        welcomeCompleted: true,
+      },
+      { new: true, upsert: true }
+    );
+
+    await sendMail({
+      to: emp.email,
+      subject: "Onboarding Started",
+      html: onboardingStartedTemplate(
+        emp.fullName,
+        "Mounttown Technologies"
+      ),
+    });
+
+    res.json({
+      success: true,
+      message: "Email sent and onboarding started",
+      onboarding,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
+
 exports.updateStep = async (req, res) =>
   res.json({
     success: true,
@@ -44,27 +67,74 @@ exports.updateStep = async (req, res) =>
       { new: true, upsert: true },
     ),
   });
-exports.hrVerify = async (req, res) =>
-  res.json({
-    success: true,
-    message: "HR verification completed",
-    onboarding: await Onboarding.findOneAndUpdate(
-      { companyId: req.user.companyId, employeeId: req.params.employeeId },
-      { hrVerification: true, status: "admin_access" },
-      { new: true },
-    ),
-  });
+exports.hrVerify = async (req, res) => {
+  try {
+    const emp = await Employee.findOne({
+      _id: req.params.employeeId,
+      companyId: req.user.companyId,
+    });
+
+    if (!emp) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const onboarding = await Onboarding.findOneAndUpdate(
+      {
+        companyId: req.user.companyId,
+        employeeId: req.params.employeeId,
+      },
+      {
+        hrVerification: true,
+        status: "admin_access",
+      },
+      { new: true }
+    );
+
+    await sendMail({
+      to: emp.email,
+      subject: "HR Verification Completed",
+      html: hrVerificationCompletedTemplate(
+        emp.fullName,
+        "Mounttown Technologies"
+      ),
+    });
+
+    res.json({
+      success: true,
+      message: "HR verification completed and email sent",
+      onboarding,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 exports.assignAdminAccessAndActivate = async (req, res) => {
   const emp = await Employee.findOne({
     _id: req.params.employeeId,
     companyId: req.user.companyId,
   });
+
   if (!emp)
-    return res
-      .status(404)
-      .json({ success: false, message: "Employee not found" });
-  const password = req.body.password || "Welcome@123";
-  let user = await User.findOne({ email: emp.email });
+    return res.status(404).json({
+      success: false,
+      message: "Employee not found",
+    });
+
+  const password =
+    req.body.password || "Welcome@123";
+
+  let user = await User.findOne({
+    email: emp.email,
+  });
+
   if (!user)
     user = await User.create({
       companyId: emp.companyId,
@@ -75,27 +145,44 @@ exports.assignAdminAccessAndActivate = async (req, res) => {
       password,
       role: emp.role,
     });
+
   emp.userId = user._id;
+
   emp.status = "active";
+
   await emp.save();
-  const onboarding = await Onboarding.findOneAndUpdate(
-    { companyId: req.user.companyId, employeeId: emp._id },
-    {
-      adminAccessAssigned: true,
-      accountSetup: true,
-      status: "completed",
-      completedAt: new Date(),
-    },
-    { new: true },
-  );
+
+  const onboarding =
+    await Onboarding.findOneAndUpdate(
+      {
+        companyId: req.user.companyId,
+        employeeId: emp._id,
+      },
+      {
+        adminAccessAssigned: true,
+        accountSetup: true,
+        status: "completed",
+        completedAt: new Date(),
+      },
+      { new: true }
+    );
+
+  // SEND DESIGNED EMAIL TEMPLATE
   await sendMail({
     to: emp.email,
     subject: "HRMS Account Activated",
-    html: `<p>Email: ${emp.email}</p><p>Password: ${password}</p>`,
+    html: accountActivationTemplate(
+      emp.fullName,
+      emp.email,
+      password,
+      "Mounttown Technologies"
+    ),
   });
+
   res.json({
     success: true,
-    message: "Admin access assigned and employee active",
+    message:
+      "Admin access assigned and employee active",
     employee: emp,
     onboarding,
   });
