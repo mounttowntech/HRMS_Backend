@@ -1,6 +1,12 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Company = require("../models/Company");
+const sendMail = require("../utils/sendMail");
+
+const passwordChangedTemplate = require(
+  "../templates/passwordChangeTemplate"
+);
+
 const generateToken = (user) => {
   return jwt.sign(
     {
@@ -16,17 +22,33 @@ const generateToken = (user) => {
     }
   );
 };
+
+// REGISTER EMPLOYER WITHOUT TOKEN
 exports.registerEmployer = async (req, res) => {
   try {
     const { name, email, phone, password, companyName, industryType } =
       req.body;
+
+    const existingUser = await User.findOne({
+      email: email?.trim().toLowerCase(),
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already registered",
+      });
+    }
+
     const user = await User.create({
       name,
       email,
       phone,
       password,
       role: "employer",
+      isActive: true,
     });
+
     const company = await Company.create({
       companyName,
       industryType,
@@ -34,24 +56,30 @@ exports.registerEmployer = async (req, res) => {
       phone,
       createdBy: user._id,
     });
+
     user.companyId = company._id;
     await user.save();
-    res
-      .status(201)
-      .json({
-        success: true,
-        message: "Employer and company created",
-        token: token(user),
-        user,
-        company,
-      });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
+
+    res.status(201).json({
+      success: true,
+      message: "Employer and company created successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        companyId: user.companyId,
+      },
+      company,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
-
-
 
 // LOGIN
 exports.login = async (req, res) => {
@@ -103,7 +131,7 @@ exports.login = async (req, res) => {
       projectmanager: "/project-manager/dashboard",
     };
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Login success",
       token: generateToken(user),
@@ -115,10 +143,77 @@ exports.login = async (req, res) => {
         email: user.email,
         role: user.role,
       },
-      redirectTo: redirectMap[user.role],
+      redirectTo: redirectMap[user.role] || "/dashboard",
     });
   } catch (error) {
-    return res.status(500).json({
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// CHANGE PASSWORD
+exports.changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword, confirmPassword } = req.body;
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Old password, new password and confirm password are required",
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password and confirm password do not match",
+      });
+    }
+
+    if (oldPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from old password",
+      });
+    }
+
+    const user = await User.findById(req.user.id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const isMatch = await user.comparePassword(oldPassword);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Old password is incorrect",
+      });
+    }
+
+    user.password = newPassword;
+    user.lastPasswordChangedAt = new Date();
+
+    await user.save();
+
+    await sendMail({
+      to: user.email,
+      subject: "HRMS Password Changed Successfully",
+      html: passwordChangedTemplate(user.name, "Mounttown HRMS"),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -148,23 +243,38 @@ exports.resetPassword = async (req, res) => {
     }
 
     user.password = newPassword;
+    user.lastPasswordChangedAt = new Date();
+
     await user.save();
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       message: "Password reset successfully",
     });
   } catch (error) {
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-exports.me = async (req, res) =>
-  res.json({
-    success: true,
-    user: await User.findById(req.user.id)
+
+// LOGGED IN USER
+exports.me = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id)
       .select("-password")
-      .populate("companyId employeeId"),
-  });
+      .populate("companyId")
+      .populate("employeeId");
+
+    res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

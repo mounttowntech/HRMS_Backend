@@ -1,14 +1,57 @@
-const router = require("express").Router();
-const c = require("../controllers/attendanceController");
-const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
-router.post("/punch-in", verifyToken, c.punchIn);
-router.post("/break/start", verifyToken, c.startBreak);
-router.post("/break/end", verifyToken, c.endBreak);
-router.post("/punch-out", verifyToken, c.punchOut);
-router.get(
-  "/",
+const express = require("express");
+const router = express.Router();
+
+const attendanceController = require("../controllers/attendanceController");
+const { verifyToken } = require("../middleware/authMiddleware");
+
+router.post(
+  "/employee/punch-in",
   verifyToken,
-  allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
-  c.getAttendance,
+  attendanceController.employeePunchIn
 );
+
+router.post(
+  "/employee/punch-out",
+  verifyToken,
+  attendanceController.employeePunchOut
+);
+
+router.post(
+  "/google/punch-in",
+  verifyToken,
+  attendanceController.googlePunchIn
+);
+
+router.post(
+  "/google/punch-out",
+  verifyToken,
+  attendanceController.googlePunchOut
+);
+
+router.post(
+  "/biometric/punch-in",
+  verifyToken,
+  attendanceController.biometricPunchIn
+);
+
+router.post(
+  "/biometric/punch-out",
+  verifyToken,
+  attendanceController.biometricPunchOut
+);
+
+router.post(
+  "/break/start",
+  verifyToken,
+  attendanceController.startBreak
+);
+
+router.post(
+  "/break/end",
+  verifyToken,
+  attendanceController.endBreak
+);
+
+router.get("/all", verifyToken, attendanceController.getAttendance);
+
 module.exports = router;

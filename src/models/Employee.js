@@ -16,7 +16,17 @@ const employeeSchema = new mongoose.Schema(
 
     employeeCode: {
       type: String,
+      required: true,
       unique: true,
+      trim: true,
+    },
+
+    biometricUserId: {
+      type: String,
+      unique: true,
+      sparse: true,
+      default: null,
+      trim: true,
     },
 
     fullName: {
@@ -34,9 +44,17 @@ const employeeSchema = new mongoose.Schema(
 
     phone: String,
 
-    designation: String,
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
 
-    department: String,
+    designationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Designation",
+      required: true,
+    },
 
     salary: {
       type: Number,
@@ -47,6 +65,12 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       enum: ["employee", "hr", "admin", "teamlead", "projectmanager"],
       default: "employee",
+    },
+
+    attendanceMode: {
+      type: String,
+      enum: ["employee_login", "google_login", "biometric", "hybrid"],
+      default: "employee_login",
     },
 
     reportingManager: {
@@ -67,7 +91,7 @@ const employeeSchema = new mongoose.Schema(
       default: "pending",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 module.exports = mongoose.model("Employee", employeeSchema);

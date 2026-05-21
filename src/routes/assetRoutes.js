@@ -23,6 +23,12 @@ router.get(
   "/all",
   verifyToken,
   allowRoles("employer", "admin", "hr"),
-  c.getAssets,
+  c.getAllAssets,
+);
+router.get(
+  "/all-access",
+  verifyToken,
+  allowRoles("employer", "admin", "hr"),
+  c.getAllAccess,
 );
 module.exports = router;
