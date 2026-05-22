@@ -32,4 +32,5 @@ app.use("/api/announcements", require("./src/routes/announcementRoutes"));
 app.use("/api/calendar", require("./src/routes/calendarRoutes"));
 app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 app.use("/api/designations",require("./src/routes/designationRoutes"));
+app.use("/api/shifts", require("./src/routes/shiftRoutes"));
 module.exports = app;

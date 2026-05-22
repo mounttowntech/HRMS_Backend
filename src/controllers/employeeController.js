@@ -1,25 +1,45 @@
 const Employee = require("../models/Employee");
 const User = require("../models/User");
+const Shift = require("../models/shiftModel");
 const sendMail = require("../utils/sendMail");
 
 const employeeCredentialsTemplate = require(
   "../templates/employeeCredentialTemplate"
 );
 
+const populateEmployee = (query) => {
+  return query
+    .populate("departmentId", "name")
+    .populate("designationId", "name")
+    .populate(
+      "shiftId",
+      "shiftName shiftType startTime endTime graceMinutes weekOff status"
+    )
+    .populate("reportingManager", "fullName email employeeCode")
+    .populate("projectManager", "fullName email employeeCode");
+};
+
+const generateEmployeeIds = async (companyId) => {
+  const count = await Employee.countDocuments({ companyId });
+  const nextNumber = String(count + 1).padStart(4, "0");
+
+  return {
+    employeeCode: `EMP${nextNumber}`,
+    biometricUserId: `BIO${nextNumber}`,
+  };
+};
+
 // CREATE EMPLOYEE + LOGIN + SEND MAIL
 exports.createEmployee = async (req, res) => {
   try {
-    const count = await Employee.countDocuments({
-      companyId: req.user.companyId,
-    });
-
-    const employeeCode =
-      req.body.employeeCode || `EMP${String(count + 1).padStart(4, "0")}`;
+    const { employeeCode, biometricUserId } = await generateEmployeeIds(
+      req.user.companyId
+    );
 
     const password = req.body.password || "Welcome@123";
 
     const existingEmployee = await Employee.findOne({
-      email: req.body.email,
+      email: req.body.email?.trim().toLowerCase(),
       companyId: req.user.companyId,
     });
 
@@ -30,25 +50,47 @@ exports.createEmployee = async (req, res) => {
       });
     }
 
+    if (req.body.shiftId) {
+      const shift = await Shift.findOne({
+        _id: req.body.shiftId,
+        companyId: req.user.companyId,
+      });
+
+      if (!shift) {
+        return res.status(404).json({
+          success: false,
+          message: "Shift not found",
+        });
+      }
+    }
+
+    const profileImage = req.file
+      ? `/uploads/profile/${req.file.filename}`
+      : "";
+
     const employee = await Employee.create({
       companyId: req.user.companyId,
       employeeCode,
-      biometricUserId: req.body.biometricUserId || null,
+      biometricUserId,
       fullName: req.body.fullName,
       email: req.body.email,
       phone: req.body.phone,
-
-      // updated fields
+      profileImage,
+      joiningDate: req.body.joiningDate || Date.now(),
+      shiftId: req.body.shiftId || null,
       departmentId: req.body.departmentId,
       designationId: req.body.designationId,
-
       salary: req.body.salary || 0,
       role: req.body.role || "employee",
       attendanceMode: req.body.attendanceMode || "employee_login",
       reportingManager: req.body.reportingManager || null,
       projectManager: req.body.projectManager || null,
-      joiningDate: req.body.joiningDate,
       status: req.body.status || "active",
+      leaveBalance: req.body.leaveBalance || {
+        sick: 10,
+        casual: 12,
+        earned: 15,
+      },
     });
 
     let user = await User.findOne({
@@ -82,11 +124,9 @@ exports.createEmployee = async (req, res) => {
       ),
     });
 
-    const populatedEmployee = await Employee.findById(employee._id)
-      .populate("departmentId", "name")
-      .populate("designationId", "name")
-      .populate("reportingManager", "fullName email employeeCode")
-      .populate("projectManager", "fullName email employeeCode");
+    const populatedEmployee = await populateEmployee(
+      Employee.findById(employee._id)
+    );
 
     res.status(201).json({
       success: true,
@@ -98,6 +138,13 @@ exports.createEmployee = async (req, res) => {
       },
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Duplicate employeeCode or biometricUserId. Please try again.",
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -108,43 +155,16 @@ exports.createEmployee = async (req, res) => {
 // GET ALL EMPLOYEES
 exports.getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find({
-      companyId: req.user.companyId,
-    })
-      .populate("departmentId", "name")
-      .populate("designationId", "name")
-      .populate("reportingManager", "fullName email employeeCode")
-      .populate("projectManager", "fullName email employeeCode");
+    const employees = await populateEmployee(
+      Employee.find({
+        companyId: req.user.companyId,
+      }).sort({ createdAt: -1 })
+    );
 
-    const formattedEmployees = employees.map((emp) => ({
-      _id: emp._id,
-      companyId: emp.companyId,
-      userId: emp.userId,
-      employeeCode: emp.employeeCode,
-      biometricUserId: emp.biometricUserId,
-      fullName: emp.fullName,
-      email: emp.email,
-      phone: emp.phone,
-
-      departmentId: emp.departmentId?._id || null,
-      departmentName: emp.departmentId?.name || null,
-
-      designationId: emp.designationId?._id || null,
-      designationName: emp.designationId?.name || null,
-
-      salary: emp.salary,
-      role: emp.role,
-      attendanceMode: emp.attendanceMode,
-      reportingManager: emp.reportingManager,
-      projectManager: emp.projectManager,
-      status: emp.status,
-      createdAt: emp.createdAt,
-      updatedAt: emp.updatedAt,
-    }));
-
-    res.json({
+    res.status(200).json({
       success: true,
-      employees: formattedEmployees,
+      count: employees.length,
+      employees,
     });
   } catch (error) {
     res.status(500).json({
@@ -157,14 +177,12 @@ exports.getEmployees = async (req, res) => {
 // GET EMPLOYEE BY ID
 exports.getEmployeeById = async (req, res) => {
   try {
-    const employee = await Employee.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    })
-      .populate("departmentId", "name")
-      .populate("designationId", "name")
-      .populate("reportingManager", "fullName email employeeCode")
-      .populate("projectManager", "fullName email employeeCode");
+    const employee = await populateEmployee(
+      Employee.findOne({
+        _id: req.params.id,
+        companyId: req.user.companyId,
+      })
+    );
 
     if (!employee) {
       return res.status(404).json({
@@ -173,28 +191,9 @@ exports.getEmployeeById = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
-      employee: {
-        _id: employee._id,
-        employeeCode: employee.employeeCode,
-        fullName: employee.fullName,
-        email: employee.email,
-        phone: employee.phone,
-
-        departmentId: employee.departmentId?._id || null,
-        departmentName: employee.departmentId?.name || null,
-
-        designationId: employee.designationId?._id || null,
-        designationName: employee.designationId?.name || null,
-
-        salary: employee.salary,
-        role: employee.role,
-        attendanceMode: employee.attendanceMode,
-        reportingManager: employee.reportingManager,
-        projectManager: employee.projectManager,
-        status: employee.status,
-      },
+      employee,
     });
   } catch (error) {
     res.status(500).json({
@@ -207,18 +206,44 @@ exports.getEmployeeById = async (req, res) => {
 // UPDATE EMPLOYEE
 exports.updateEmployee = async (req, res) => {
   try {
-    const employee = await Employee.findOneAndUpdate(
-      {
-        _id: req.params.id,
+    if (req.body.shiftId) {
+      const shift = await Shift.findOne({
+        _id: req.body.shiftId,
         companyId: req.user.companyId,
-      },
-      req.body,
-      { new: true }
-    )
-      .populate("departmentId", "name")
-      .populate("designationId", "name")
-      .populate("reportingManager", "fullName email employeeCode")
-      .populate("projectManager", "fullName email employeeCode");
+      });
+
+      if (!shift) {
+        return res.status(404).json({
+          success: false,
+          message: "Shift not found",
+        });
+      }
+    }
+
+    const updateData = {
+      ...req.body,
+    };
+
+    delete updateData.employeeCode;
+    delete updateData.biometricUserId;
+
+    if (req.file) {
+      updateData.profileImage = `/uploads/profile/${req.file.filename}`;
+    }
+
+    const employee = await populateEmployee(
+      Employee.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          companyId: req.user.companyId,
+        },
+        updateData,
+        {
+          new: true,
+          runValidators: true,
+        }
+      )
+    );
 
     if (!employee) {
       return res.status(404).json({
@@ -237,9 +262,9 @@ exports.updateEmployee = async (req, res) => {
       }
     );
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Employee updated",
+      message: "Employee updated successfully",
       employee,
     });
   } catch (error) {
@@ -269,9 +294,9 @@ exports.deleteEmployee = async (req, res) => {
       employeeId: employee._id,
     });
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Employee and login deleted",
+      message: "Employee and login deleted successfully",
     });
   } catch (error) {
     res.status(500).json({

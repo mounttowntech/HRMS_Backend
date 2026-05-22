@@ -44,6 +44,22 @@ const employeeSchema = new mongoose.Schema(
 
     phone: String,
 
+    profileImage: {
+      type: String,
+      default: "",
+    },
+
+    joiningDate: {
+      type: Date,
+      default: Date.now,
+    },
+
+    shiftId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shift",
+      default: null,
+    },
+
     departmentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Department",
@@ -90,17 +106,16 @@ const employeeSchema = new mongoose.Schema(
       enum: ["pending", "onboarding", "active", "inactive", "terminated"],
       default: "pending",
     },
+
     leaveBalance: {
       sick: {
         type: Number,
         default: 10,
       },
-
       casual: {
         type: Number,
         default: 12,
       },
-
       earned: {
         type: Number,
         default: 15,
