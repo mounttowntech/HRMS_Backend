@@ -17,13 +17,11 @@ const employeeSchema = new mongoose.Schema(
     employeeCode: {
       type: String,
       required: true,
-      unique: true,
       trim: true,
     },
 
     biometricUserId: {
       type: String,
-      unique: true,
       sparse: true,
       default: null,
       trim: true,
@@ -122,7 +120,7 @@ const employeeSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Employee", employeeSchema);

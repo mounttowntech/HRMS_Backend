@@ -3,23 +3,22 @@ const router = express.Router();
 
 const employeeController = require("../controllers/employeeController");
 const { verifyToken } = require("../middleware/authMiddleware");
-const upload = require("../middleware/upload");
+const profileUpload = require("../middleware/upload");
 
 router.post(
   "/create",
   verifyToken,
-  upload.single("profileImage"),
+  profileUpload.single("profileImage"),
   employeeController.createEmployee
 );
 
 router.get("/all", verifyToken, employeeController.getEmployees);
-
 router.get("/:id", verifyToken, employeeController.getEmployeeById);
 
 router.put(
   "/:id",
   verifyToken,
-  upload.single("profileImage"),
+  profileUpload.single("profileImage"),
   employeeController.updateEmployee
 );
 
