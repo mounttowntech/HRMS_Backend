@@ -90,6 +90,22 @@ const employeeSchema = new mongoose.Schema(
       enum: ["pending", "onboarding", "active", "inactive", "terminated"],
       default: "pending",
     },
+    leaveBalance: {
+      sick: {
+        type: Number,
+        default: 10,
+      },
+
+      casual: {
+        type: Number,
+        default: 12,
+      },
+
+      earned: {
+        type: Number,
+        default: 15,
+      },
+    },
   },
   { timestamps: true }
 );

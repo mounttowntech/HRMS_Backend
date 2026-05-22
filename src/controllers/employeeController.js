@@ -114,8 +114,7 @@ exports.getEmployees = async (req, res) => {
       .populate("departmentId", "name")
       .populate("designationId", "name")
       .populate("reportingManager", "fullName email employeeCode")
-      .populate("projectManager", "fullName email employeeCode")
-      .sort({ createdAt: -1 });
+      .populate("projectManager", "fullName email employeeCode");
 
     const formattedEmployees = employees.map((emp) => ({
       _id: emp._id,

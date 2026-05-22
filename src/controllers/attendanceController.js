@@ -3,6 +3,10 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 
+// ======================================================
+// DATE HELPERS
+// ======================================================
+
 const today = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -13,6 +17,10 @@ const minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
 };
 
+// ======================================================
+// CALCULATE ATTENDANCE
+// ======================================================
+
 const calculateAttendance = (attendance) => {
   const totalBreakMinutes = attendance.breaks.reduce(
     (sum, b) => sum + (b.minutes || 0),
@@ -22,7 +30,10 @@ const calculateAttendance = (attendance) => {
   attendance.totalBreakMinutes = totalBreakMinutes;
 
   if (attendance.punchIn && attendance.punchOut) {
-    const totalMinutes = minutesDiff(attendance.punchIn, attendance.punchOut);
+    const totalMinutes = minutesDiff(
+      attendance.punchIn,
+      attendance.punchOut
+    );
 
     attendance.workingMinutes = Math.max(
       0,
@@ -30,33 +41,99 @@ const calculateAttendance = (attendance) => {
     );
 
     attendance.status =
-      attendance.workingMinutes < 240 ? "half_day" : "present";
+      attendance.workingMinutes < 240
+        ? "half_day"
+        : "present";
   }
 
   return attendance;
 };
 
-const verifyEmployeePassword = async (companyId, employeeCode, password) => {
-  const employee = await Employee.findOne({
-    companyId,
-    employeeCode,
-  });
+// ======================================================
+// VERIFY EMPLOYEE PASSWORD
+// ======================================================
 
-  if (!employee) return null;
+const verifyEmployeePassword = async (
+  companyId,
+  employeeCode,
+  password
+) => {
+  try {
+    console.log("================================");
+    console.log("COMPANY ID:", companyId);
+    console.log("EMPLOYEE CODE:", employeeCode);
+    console.log("PASSWORD:", password);
 
-  const user = await User.findOne({
-    employeeId: employee._id,
-    email: employee.email,
-  }).select("+password");
+    // ========================================
+    // FIND EMPLOYEE
+    // ========================================
 
-  if (!user) return null;
+    const employee = await Employee.findOne({
+      companyId,
+      employeeCode,
+    });
 
-  const isMatch = await bcrypt.compare(password, user.password);
+    console.log("EMPLOYEE:", employee);
 
-  if (!isMatch) return null;
+    if (!employee) {
+      console.log("❌ Employee not found");
+      return null;
+    }
 
-  return employee;
+    // ========================================
+    // FIND USER
+    // ========================================
+
+    const user = await User.findOne({
+      employeeId: employee._id,
+    }).select("+password");
+
+    console.log("USER:", user);
+
+    if (!user) {
+      console.log("❌ User not found");
+      return null;
+    }
+
+    // ========================================
+    // CHECK PASSWORD EXISTS
+    // ========================================
+
+    if (!user.password) {
+      console.log("❌ Password missing");
+      return null;
+    }
+
+    console.log("DB PASSWORD:", user.password);
+
+    // ========================================
+    // COMPARE PASSWORD
+    // ========================================
+
+    const isMatch = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    console.log("PASSWORD MATCH:", isMatch);
+
+    if (!isMatch) {
+      console.log("❌ Invalid password");
+      return null;
+    }
+
+    console.log("✅ LOGIN SUCCESS");
+
+    return employee;
+  } catch (error) {
+    console.log("VERIFY ERROR:", error);
+    return null;
+  }
 };
+
+// ======================================================
+// EMPLOYEE PUNCH IN
+// ======================================================
 
 exports.employeePunchIn = async (req, res) => {
   try {
@@ -65,7 +142,8 @@ exports.employeePunchIn = async (req, res) => {
     if (!employeeCode || !password) {
       return res.status(400).json({
         success: false,
-        message: "employeeCode and password are mandatory",
+        message:
+          "employeeCode and password are mandatory",
       });
     }
 
@@ -78,30 +156,49 @@ exports.employeePunchIn = async (req, res) => {
     if (!employee) {
       return res.status(401).json({
         success: false,
-        message: "Invalid employee code or password",
+        message:
+          "Invalid employee code or password",
       });
     }
 
-    const attendance = await Attendance.findOneAndUpdate(
-      {
+    // ==========================================
+    // CHECK EXISTING ATTENDANCE
+    // ==========================================
+
+    let attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      date: today(),
+    });
+
+    // ==========================================
+    // ALREADY PUNCHED IN
+    // ==========================================
+
+    if (attendance && attendance.punchIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched in today",
+      });
+    }
+
+    // ==========================================
+    // CREATE NEW ATTENDANCE
+    // ==========================================
+
+    if (!attendance) {
+      attendance = new Attendance({
         companyId: req.user.companyId,
         employeeId: employee._id,
         date: today(),
-      },
-      {
-        $setOnInsert: {
-          companyId: req.user.companyId,
-          employeeId: employee._id,
-          date: today(),
-        },
-        $set: {
-          punchIn: new Date(),
-          punchInSource: "employee_login",
-          status: "present",
-        },
-      },
-      { new: true, upsert: true }
-    );
+      });
+    }
+
+    attendance.punchIn = new Date();
+    attendance.punchInSource = "employee_login";
+    attendance.status = "present";
+
+    await attendance.save();
 
     res.json({
       success: true,
@@ -109,12 +206,18 @@ exports.employeePunchIn = async (req, res) => {
       attendance,
     });
   } catch (error) {
+    console.log("PUNCH IN ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+// ======================================================
+// EMPLOYEE PUNCH OUT
+// ======================================================
 
 exports.employeePunchOut = async (req, res) => {
   try {
@@ -123,7 +226,8 @@ exports.employeePunchOut = async (req, res) => {
     if (!employeeCode || !password) {
       return res.status(400).json({
         success: false,
-        message: "employeeCode and password are mandatory",
+        message:
+          "employeeCode and password are mandatory",
       });
     }
 
@@ -136,7 +240,8 @@ exports.employeePunchOut = async (req, res) => {
     if (!employee) {
       return res.status(401).json({
         success: false,
-        message: "Invalid employee code or password",
+        message:
+          "Invalid employee code or password",
       });
     }
 
@@ -150,6 +255,13 @@ exports.employeePunchOut = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Punch in first",
+      });
+    }
+
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched out",
       });
     }
 
@@ -166,6 +278,8 @@ exports.employeePunchOut = async (req, res) => {
       attendance,
     });
   } catch (error) {
+    console.log("PUNCH OUT ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -173,213 +287,9 @@ exports.employeePunchOut = async (req, res) => {
   }
 };
 
-exports.googlePunchIn = async (req, res) => {
-  try {
-    const employee = await Employee.findOne({
-      companyId: req.user.companyId,
-      email: req.user.email,
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found for this Google account",
-      });
-    }
-
-    const attendance = await Attendance.findOneAndUpdate(
-      {
-        companyId: req.user.companyId,
-        employeeId: employee._id,
-        date: today(),
-      },
-      {
-        $setOnInsert: {
-          companyId: req.user.companyId,
-          employeeId: employee._id,
-          date: today(),
-        },
-        $set: {
-          punchIn: new Date(),
-          punchInSource: "google_login",
-          status: "present",
-        },
-      },
-      { new: true, upsert: true }
-    );
-
-    res.json({
-      success: true,
-      message: "Google punch in saved",
-      attendance,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.googlePunchOut = async (req, res) => {
-  try {
-    const employee = await Employee.findOne({
-      companyId: req.user.companyId,
-      email: req.user.email,
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found for this Google account",
-      });
-    }
-
-    const attendance = await Attendance.findOne({
-      companyId: req.user.companyId,
-      employeeId: employee._id,
-      date: today(),
-    });
-
-    if (!attendance || !attendance.punchIn) {
-      return res.status(400).json({
-        success: false,
-        message: "Punch in first",
-      });
-    }
-
-    attendance.punchOut = new Date();
-    attendance.punchOutSource = "google_login";
-
-    calculateAttendance(attendance);
-
-    await attendance.save();
-
-    res.json({
-      success: true,
-      message: "Google punch out saved",
-      attendance,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.biometricPunchIn = async (req, res) => {
-  try {
-    const { employeeCode, biometricUserId } = req.body;
-
-    if (!employeeCode && !biometricUserId) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeCode or biometricUserId is required",
-      });
-    }
-
-    const employee = await Employee.findOne({
-      companyId: req.user.companyId,
-      $or: [{ employeeCode }, { biometricUserId }],
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found for biometric",
-      });
-    }
-
-    const attendance = await Attendance.findOneAndUpdate(
-      {
-        companyId: req.user.companyId,
-        employeeId: employee._id,
-        date: today(),
-      },
-      {
-        $setOnInsert: {
-          companyId: req.user.companyId,
-          employeeId: employee._id,
-          date: today(),
-        },
-        $set: {
-          punchIn: new Date(),
-          punchInSource: "biometric",
-          status: "present",
-        },
-      },
-      { new: true, upsert: true }
-    );
-
-    res.json({
-      success: true,
-      message: "Biometric punch in saved",
-      attendance,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-exports.biometricPunchOut = async (req, res) => {
-  try {
-    const { employeeCode, biometricUserId } = req.body;
-
-    if (!employeeCode && !biometricUserId) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeCode or biometricUserId is required",
-      });
-    }
-
-    const employee = await Employee.findOne({
-      companyId: req.user.companyId,
-      $or: [{ employeeCode }, { biometricUserId }],
-    });
-
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found for biometric",
-      });
-    }
-
-    const attendance = await Attendance.findOne({
-      companyId: req.user.companyId,
-      employeeId: employee._id,
-      date: today(),
-    });
-
-    if (!attendance || !attendance.punchIn) {
-      return res.status(400).json({
-        success: false,
-        message: "Punch in first",
-      });
-    }
-
-    attendance.punchOut = new Date();
-    attendance.punchOutSource = "biometric";
-
-    calculateAttendance(attendance);
-
-    await attendance.save();
-
-    res.json({
-      success: true,
-      message: "Biometric punch out saved",
-      attendance,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
+// ======================================================
+// START BREAK
+// ======================================================
 
 exports.startBreak = async (req, res) => {
   try {
@@ -405,7 +315,18 @@ exports.startBreak = async (req, res) => {
       });
     }
 
-    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Cannot start break after punch out",
+      });
+    }
+
+    const lastBreak =
+      attendance.breaks[
+        attendance.breaks.length - 1
+      ];
 
     if (lastBreak && !lastBreak.breakOut) {
       return res.status(400).json({
@@ -427,12 +348,18 @@ exports.startBreak = async (req, res) => {
       attendance,
     });
   } catch (error) {
+    console.log("BREAK START ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+// ======================================================
+// END BREAK
+// ======================================================
 
 exports.endBreak = async (req, res) => {
   try {
@@ -445,9 +372,236 @@ exports.endBreak = async (req, res) => {
       });
     }
 
+    // ==========================================
+    // FIND ATTENDANCE
+    // ==========================================
+
+    const attendance =
+      await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId,
+        date: today(),
+      });
+
+    if (
+      !attendance ||
+      !attendance.punchIn
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Punch in first",
+      });
+    }
+
+    // ==========================================
+    // FIND ACTIVE BREAK
+    // ==========================================
+
+    const lastBreak =
+      attendance.breaks[
+        attendance.breaks.length - 1
+      ];
+
+    if (
+      !lastBreak ||
+      lastBreak.breakOut
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "No active break",
+      });
+    }
+
+    // ==========================================
+    // END BREAK
+    // ==========================================
+
+    lastBreak.breakOut =
+      new Date();
+
+    lastBreak.minutes =
+      minutesDiff(
+        lastBreak.breakIn,
+        lastBreak.breakOut
+      );
+
+    calculateAttendance(
+      attendance
+    );
+
+    await attendance.save();
+
+    // ==========================================
+    // FORMAT TIME
+    // ==========================================
+
+    const formattedBreak =
+      {
+        breakIn:
+          lastBreak.breakIn.toLocaleTimeString(
+            "en-IN",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            }
+          ),
+
+        breakOut:
+          lastBreak.breakOut.toLocaleTimeString(
+            "en-IN",
+            {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            }
+          ),
+
+        minutes:
+          lastBreak.minutes,
+
+        source:
+          lastBreak.source,
+      };
+
+    // ==========================================
+    // RESPONSE
+    // ==========================================
+
+    res.json({
+      success: true,
+      message: "Break ended",
+
+      breakDetails:
+        formattedBreak,
+
+      attendance,
+    });
+  } catch (error) {
+    console.log(
+      "BREAK END ERROR:",
+      error
+    );
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ======================================================
+// GET ATTENDANCE
+// ======================================================
+// ======================================================
+// GOOGLE PUNCH IN
+// ======================================================
+
+exports.googlePunchIn = async (req, res) => {
+  try {
+    // ==========================================
+    // FIND EMPLOYEE USING GOOGLE EMAIL
+    // ==========================================
+
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      email: req.user.email,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found for this Google account",
+      });
+    }
+
+    // ==========================================
+    // CHECK EXISTING ATTENDANCE
+    // ==========================================
+
+    let attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      date: today(),
+    });
+
+    // ==========================================
+    // ALREADY PUNCHED IN
+    // ==========================================
+
+    if (attendance && attendance.punchIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched in today",
+      });
+    }
+
+    // ==========================================
+    // CREATE NEW ATTENDANCE
+    // ==========================================
+
+    if (!attendance) {
+      attendance = new Attendance({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        date: today(),
+      });
+    }
+
+    attendance.punchIn = new Date();
+    attendance.punchInSource = "google_login";
+    attendance.status = "present";
+
+    await attendance.save();
+
+    res.json({
+      success: true,
+      message: "Google punch in saved",
+      attendance,
+    });
+  } catch (error) {
+    console.log("GOOGLE PUNCH IN ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ======================================================
+// GOOGLE PUNCH OUT
+// ======================================================
+
+exports.googlePunchOut = async (req, res) => {
+  try {
+    // ==========================================
+    // FIND EMPLOYEE USING GOOGLE EMAIL
+    // ==========================================
+
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      email: req.user.email,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found for this Google account",
+      });
+    }
+
+    // ==========================================
+    // FIND TODAY ATTENDANCE
+    // ==========================================
+
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,
-      employeeId,
+      employeeId: employee._id,
       date: today(),
     });
 
@@ -458,17 +612,19 @@ exports.endBreak = async (req, res) => {
       });
     }
 
-    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+    // ==========================================
+    // ALREADY PUNCHED OUT
+    // ==========================================
 
-    if (!lastBreak || lastBreak.breakOut) {
+    if (attendance.punchOut) {
       return res.status(400).json({
         success: false,
-        message: "No active break",
+        message: "Already punched out",
       });
     }
 
-    lastBreak.breakOut = new Date();
-    lastBreak.minutes = minutesDiff(lastBreak.breakIn, lastBreak.breakOut);
+    attendance.punchOut = new Date();
+    attendance.punchOutSource = "google_login";
 
     calculateAttendance(attendance);
 
@@ -476,10 +632,12 @@ exports.endBreak = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Break ended",
+      message: "Google punch out saved",
       attendance,
     });
   } catch (error) {
+    console.log("GOOGLE PUNCH OUT ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
@@ -487,15 +645,208 @@ exports.endBreak = async (req, res) => {
   }
 };
 
+// ======================================================
+// BIOMETRIC PUNCH IN
+// ======================================================
+
+exports.biometricPunchIn = async (req, res) => {
+  try {
+    const { employeeCode, biometricUserId } =
+      req.body;
+
+    // ==========================================
+    // VALIDATION
+    // ==========================================
+
+    if (!employeeCode && !biometricUserId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "employeeCode or biometricUserId is required",
+      });
+    }
+
+    // ==========================================
+    // FIND EMPLOYEE
+    // ==========================================
+
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      $or: [
+        { employeeCode },
+        { biometricUserId },
+      ],
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found for biometric",
+      });
+    }
+
+    // ==========================================
+    // CHECK ATTENDANCE
+    // ==========================================
+
+    let attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      date: today(),
+    });
+
+    // ==========================================
+    // ALREADY PUNCHED IN
+    // ==========================================
+
+    if (attendance && attendance.punchIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched in today",
+      });
+    }
+
+    // ==========================================
+    // CREATE ATTENDANCE
+    // ==========================================
+
+    if (!attendance) {
+      attendance = new Attendance({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        date: today(),
+      });
+    }
+
+    attendance.punchIn = new Date();
+    attendance.punchInSource = "biometric";
+    attendance.status = "present";
+
+    await attendance.save();
+
+    res.json({
+      success: true,
+      message: "Biometric punch in saved",
+      attendance,
+    });
+  } catch (error) {
+    console.log("BIOMETRIC PUNCH IN ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ======================================================
+// BIOMETRIC PUNCH OUT
+// ======================================================
+
+exports.biometricPunchOut = async (req, res) => {
+  try {
+    const { employeeCode, biometricUserId } =
+      req.body;
+
+    // ==========================================
+    // VALIDATION
+    // ==========================================
+
+    if (!employeeCode && !biometricUserId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "employeeCode or biometricUserId is required",
+      });
+    }
+
+    // ==========================================
+    // FIND EMPLOYEE
+    // ==========================================
+
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
+      $or: [
+        { employeeCode },
+        { biometricUserId },
+      ],
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found for biometric",
+      });
+    }
+
+    // ==========================================
+    // FIND ATTENDANCE
+    // ==========================================
+
+    const attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      date: today(),
+    });
+
+    if (!attendance || !attendance.punchIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Punch in first",
+      });
+    }
+
+    // ==========================================
+    // ALREADY PUNCHED OUT
+    // ==========================================
+
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched out",
+      });
+    }
+
+    attendance.punchOut = new Date();
+    attendance.punchOutSource = "biometric";
+
+    calculateAttendance(attendance);
+
+    await attendance.save();
+
+    res.json({
+      success: true,
+      message: "Biometric punch out saved",
+      attendance,
+    });
+  } catch (error) {
+    console.log("BIOMETRIC PUNCH OUT ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 exports.getAttendance = async (req, res) => {
   try {
     const filter = {
       companyId: req.user.companyId,
     };
 
+    // ==========================================
+    // FILTER BY EMPLOYEE
+    // ==========================================
+
     if (req.query.employeeId) {
       filter.employeeId = req.query.employeeId;
     }
+
+    // ==========================================
+    // FILTER BY DATE
+    // ==========================================
 
     if (req.query.date) {
       const start = new Date(req.query.date);
@@ -511,14 +862,20 @@ exports.getAttendance = async (req, res) => {
     }
 
     const attendance = await Attendance.find(filter)
-      .populate("employeeId", "fullName employeeCode department designation")
+      .populate(
+        "employeeId",
+        "fullName employeeCode department designation"
+      )
       .sort({ date: -1 });
 
     res.json({
       success: true,
+      count: attendance.length,
       attendance,
     });
   } catch (error) {
+    console.log("GET ATTENDANCE ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
