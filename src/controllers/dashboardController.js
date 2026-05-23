@@ -6,28 +6,28 @@ const Employee = require("../models/Employee"),
   Project = require("../models/Project"),
   Onboarding = require("../models/Onboarding"),
   Document = require("../models/Document");
-exports.employerDashboard = async (req, res) => {
-  const companyId = req.user.companyId;
-  res.json({
-    success: true,
-    dashboard: {
-      totalEmployees: await Employee.countDocuments({ companyId }),
-      activeProjects: await Project.countDocuments({
-        companyId,
-        status: { $ne: "closed" },
-      }),
-      pendingLeaves: await Leave.countDocuments({
-        companyId,
-        status: { $in: ["pending_manager", "pending_hr"] },
-      }),
-      payrollProcessed: await Payroll.countDocuments({ companyId }),
-      openTasks: await Task.countDocuments({
-        companyId,
-        status: { $ne: "closed" },
-      }),
-    },
-  });
-};
+// exports.employerDashboard = async (req, res) => {
+//   const companyId = req.user.companyId;
+//   res.json({
+//     success: true,
+//     dashboard: {
+//       totalEmployees: await Employee.countDocuments({ companyId }),
+//       activeProjects: await Project.countDocuments({
+//         companyId,
+//         status: { $ne: "closed" },
+//       }),
+//       pendingLeaves: await Leave.countDocuments({
+//         companyId,
+//         status: { $in: ["pending_manager", "pending_hr"] },
+//       }),
+//       payrollProcessed: await Payroll.countDocuments({ companyId }),
+//       openTasks: await Task.countDocuments({
+//         companyId,
+//         status: { $ne: "closed" },
+//       }),
+//     },
+//   });
+// };
 exports.adminDashboard = async (req, res) => {
   const companyId = req.user.companyId;
   const departments = await Employee.distinct("department", { companyId });
@@ -88,26 +88,67 @@ exports.hrDashboard = async (req, res) => {
   });
 };
 exports.employeeDashboard = async (req, res) => {
-  const companyId = req.user.companyId,
-    employeeId = req.user.employeeId;
-  const employee = await Employee.findById(employeeId);
-  res.json({
-    success: true,
-    dashboard: {
-      employee,
-      attendanceToday: await Attendance.findOne({ companyId, employeeId }).sort(
-        { date: -1 },
-      ),
-      leaveBalance: employee?.leaveBalance,
-      myTasks: await Task.find({ companyId, assignedTo: employeeId })
-        .sort({ createdAt: -1 })
-        .limit(10),
-      latestPayslip: await Payroll.findOne({ companyId, employeeId }).sort({
-        year: -1,
-        month: -1,
-      }),
-    },
-  });
+  try {
+
+    const companyId = req.user.companyId;
+    const employeeId = req.user.employeeId;
+
+    console.log("EMPLOYEE ID:", employeeId);
+
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID missing in token",
+      });
+    }
+
+    const employee = await Employee.findById(employeeId);
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const attendanceToday = await Attendance.findOne({
+      companyId,
+      employeeId,
+    }).sort({ date: -1 });
+
+    const myTasks = await Task.find({
+      companyId,
+      assignedTo: employeeId,
+    })
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    const latestPayslip = await Payroll.findOne({
+      companyId,
+      employeeId,
+    }).sort({
+      year: -1,
+      month: -1,
+    });
+
+    res.json({
+      success: true,
+      dashboard: {
+        employee,
+        attendanceToday,
+        leaveBalance: employee.leaveBalance,
+        myTasks,
+        latestPayslip,
+      },
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };
 exports.teamLeadDashboard = async (req, res) => {
   const companyId = req.user.companyId;
@@ -134,33 +175,33 @@ exports.teamLeadDashboard = async (req, res) => {
     },
   });
 };
-exports.projectManagerDashboard = async (req, res) => {
-  const companyId = req.user.companyId;
-  res.json({
-    success: true,
-    dashboard: {
-      activeProjects: await Project.countDocuments({
-        companyId,
-        projectManager: req.user.employeeId,
-        status: { $ne: "closed" },
-      }),
-      tasksInProgress: await Task.countDocuments({
-        companyId,
-        status: "in_progress",
-      }),
-      tasksCompleted: await Task.countDocuments({
-        companyId,
-        status: "closed",
-      }),
-      overdueTasks: await Task.countDocuments({
-        companyId,
-        dueDate: { $lt: new Date() },
-        status: { $ne: "closed" },
-      }),
-      projects: await Project.find({
-        companyId,
-        projectManager: req.user.employeeId,
-      }).limit(10),
-    },
-  });
-};
+// exports.projectManagerDashboard = async (req, res) => {
+//   const companyId = req.user.companyId;
+//   res.json({
+//     success: true,
+//     dashboard: {
+//       activeProjects: await Project.countDocuments({
+//         companyId,
+//         projectManager: req.user.employeeId,
+//         status: { $ne: "closed" },
+//       }),
+//       tasksInProgress: await Task.countDocuments({
+//         companyId,
+//         status: "in_progress",
+//       }),
+//       tasksCompleted: await Task.countDocuments({
+//         companyId,
+//         status: "closed",
+//       }),
+//       overdueTasks: await Task.countDocuments({
+//         companyId,
+//         dueDate: { $lt: new Date() },
+//         status: { $ne: "closed" },
+//       }),
+//       projects: await Project.find({
+//         companyId,
+//         projectManager: req.user.employeeId,
+//       }).limit(10),
+//     },
+//   });
+// };

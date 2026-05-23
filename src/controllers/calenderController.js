@@ -4,13 +4,36 @@ const Leave = require("../models/Leave");
 
 exports.createEvent = async (req, res) => {
   try {
+
+    if (!req.body) {
+      return res.status(400).json({
+        success: false,
+        message: "Request body is missing",
+      });
+    }
+
+    const {
+      title,
+      type,
+      startDate,
+      endDate,
+      description,
+    } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required",
+      });
+    }
+
     const event = await CalendarEvent.create({
       companyId: req.user.companyId,
-      title: req.body.title,
-      type: req.body.type || "event",
-      startDate: req.body.startDate,
-      endDate: req.body.endDate,
-      description: req.body.description,
+      title,
+      type: type || "event",
+      startDate,
+      endDate,
+      description,
       createdBy: req.user.id,
     });
 
@@ -19,7 +42,9 @@ exports.createEvent = async (req, res) => {
       message: "Calendar event created successfully",
       event,
     });
+
   } catch (error) {
+
     res.status(500).json({
       success: false,
       message: error.message,

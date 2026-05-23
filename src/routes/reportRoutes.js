@@ -4,7 +4,7 @@ const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 router.get(
   "/summary",
   verifyToken,
-  allowRoles("employer", "admin", "hr", "projectmanager"),
+  allowRoles("admin", "hr", "projectmanager"),
   c.summaryReport,
 );
 module.exports = router;

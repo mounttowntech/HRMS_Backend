@@ -10,7 +10,10 @@ const schema = new mongoose.Schema(
     description: String,
     clientName: String,
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    projectManager: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
+    teamlead: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+    },
     teamMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
     startDate: Date,
     dueDate: Date,

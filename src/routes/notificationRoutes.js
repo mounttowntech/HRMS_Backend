@@ -10,9 +10,9 @@ const {
 
 const { verifyToken } = require("../middleware/authMiddleware");
 
-router.post("/", verifyToken, createNotification);
-router.get("/", verifyToken, getNotifications);
-router.put("/:id/read", verifyToken, markNotificationRead);
+router.post("/create", verifyToken, createNotification);
+router.get("/all", verifyToken, getNotifications);
+router.put("/read/:id", verifyToken, markNotificationRead);
 router.delete("/:id", verifyToken, deleteNotification);
 
 module.exports = router;

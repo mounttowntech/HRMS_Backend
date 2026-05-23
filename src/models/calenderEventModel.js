@@ -13,7 +13,7 @@ const calendarEventSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["holiday", "meeting", "event"],
+      enum: ["holiday", "meeting", "event","training"],
       default: "event",
     },
     startDate: {

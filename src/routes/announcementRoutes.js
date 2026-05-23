@@ -10,8 +10,8 @@ const {
 
 const { verifyToken } = require("../middleware/authMiddleware");
 
-router.post("/", verifyToken, createAnnouncement);
-router.get("/", verifyToken, getAnnouncements);
+router.post("/create", verifyToken, createAnnouncement);
+router.get("/all", verifyToken, getAnnouncements);
 router.put("/:id", verifyToken, updateAnnouncement);
 router.delete("/:id", verifyToken, deleteAnnouncement);
 

@@ -12,8 +12,8 @@ const {
 
 const { verifyToken } = require("../middleware/authMiddleware");
 
-router.post("/events", verifyToken, createEvent);
-router.get("/events", verifyToken, getEvents);
+router.post("/create-events", verifyToken, createEvent);
+router.get("/all", verifyToken, getEvents);
 router.get("/holidays", verifyToken, getHolidays);
 router.get("/attendance", verifyToken, getAttendanceCalendar);
 router.get("/leaves", verifyToken, getLeaveCalendar);

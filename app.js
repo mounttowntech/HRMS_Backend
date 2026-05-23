@@ -2,7 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 app.use(cors());
+// ✅ Middleware
 app.use(express.json());
+
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.get("/", (req, res) =>
@@ -30,4 +32,5 @@ app.use("/api/calendar", require("./src/routes/calendarRoutes"));
 app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 app.use("/api/designations",require("./src/routes/designationRoutes"));
 app.use("/api/shifts", require("./src/routes/shiftRoutes"));
+app.use("/api/analytics",require("./src/routes/analyticsRoutes"));
 module.exports = app;
