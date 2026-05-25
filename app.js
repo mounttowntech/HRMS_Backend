@@ -2,7 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 app.use(cors());
+// ✅ Middleware
 app.use(express.json());
+
 app.use(express.urlencoded({ extended: true }));
 app.use("/uploads", express.static("uploads"));
 app.get("/", (req, res) =>
@@ -24,4 +26,13 @@ app.use("/api/assets", require("./src/routes/assetRoutes"));
 app.use("/api/bpo", require("./src/routes/bpoRoutes"));
 app.use("/api/reports", require("./src/routes/reportRoutes"));
 app.use("/api/dashboard", require("./src/routes/dashboardRoutes"));
+app.use("/api/departments", require("./src/routes/departmentRoutes"));
+app.use("/api/announcements", require("./src/routes/announcementRoutes")); 
+app.use("/api/calendar", require("./src/routes/calendarRoutes"));
+app.use("/api/notifications", require("./src/routes/notificationRoutes"));
+app.use("/api/designations",require("./src/routes/designationRoutes"));
+app.use("/api/shifts", require("./src/routes/shiftRoutes"));
+app.use("/api/analytics",require("./src/routes/analyticsRoutes"));
+app.use("/api/industry-types", require("./src/routes/industryTypeRoutes"));
+app.use("/api/clients",require("./src/routes/clientRoutes"));
 module.exports = app;

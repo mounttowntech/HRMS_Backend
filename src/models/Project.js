@@ -1,26 +1,75 @@
 const mongoose = require("mongoose");
-const schema = new mongoose.Schema(
+
+const projectSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
     },
-    projectName: { type: String, required: true },
+
+    clientId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: true,
+    },
+
+    projectName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
     description: String,
-    clientName: String,
-    assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    projectManager: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
-    teamMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: "Employee" }],
+
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+    },
+
+    teamlead: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+    },
+
+    projectmanager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+    },
+
+    teamMembers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Employee",
+      },
+    ],
+
     startDate: Date,
     dueDate: Date,
-    progress: { type: Number, default: 0 },
+
+    progress: {
+      type: Number,
+      default: 0,
+    },
+
     status: {
       type: String,
-      enum: ["created", "assigned", "in_progress", "completed", "closed"],
+      enum: [
+        "created",
+        "assigned",
+        "in_progress",
+        "completed",
+        "closed",
+      ],
       default: "created",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
-module.exports = mongoose.model("Project", schema);
+
+projectSchema.index(
+  { companyId: 1, clientId: 1, projectName: 1 },
+  { unique: true }
+);
+
+module.exports = mongoose.model("Project", projectSchema);

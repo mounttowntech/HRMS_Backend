@@ -16,7 +16,15 @@ const employeeSchema = new mongoose.Schema(
 
     employeeCode: {
       type: String,
-      unique: true,
+      required: true,
+      trim: true,
+    },
+
+    biometricUserId: {
+      type: String,
+      sparse: true,
+      default: null,
+      trim: true,
     },
 
     fullName: {
@@ -34,9 +42,33 @@ const employeeSchema = new mongoose.Schema(
 
     phone: String,
 
-    designation: String,
+    profileImage: {
+      type: String,
+      default: "",
+    },
 
-    department: String,
+    joiningDate: {
+      type: Date,
+      default: Date.now,
+    },
+
+    shiftId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Shift",
+      default: null,
+    },
+
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
+
+    designationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Designation",
+      required: true,
+    },
 
     salary: {
       type: Number,
@@ -47,6 +79,12 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       enum: ["employee", "hr", "admin", "teamlead", "projectmanager"],
       default: "employee",
+    },
+
+    attendanceMode: {
+      type: String,
+      enum: ["employee_login", "google_login", "biometric", "hybrid"],
+      default: "employee_login",
     },
 
     reportingManager: {
@@ -65,6 +103,21 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "onboarding", "active", "inactive", "terminated"],
       default: "pending",
+    },
+
+    leaveBalance: {
+      sick: {
+        type: Number,
+        default: 10,
+      },
+      casual: {
+        type: Number,
+        default: 12,
+      },
+      earned: {
+        type: Number,
+        default: 15,
+      },
     },
   },
   { timestamps: true },

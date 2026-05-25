@@ -1,29 +1,27 @@
-const router = require("express").Router();
-const c = require("../controllers/employeeController");
-const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
+const express = require("express");
+const router = express.Router();
+
+const employeeController = require("../controllers/employeeController");
+const { verifyToken } = require("../middleware/authMiddleware");
+const profileUpload = require("../middleware/upload");
+
 router.post(
   "/create",
   verifyToken,
-  allowRoles("employer", "admin", "hr"),
-  c.createEmployee,
+  profileUpload.single("profileImage"),
+  employeeController.createEmployee
 );
-router.post(
-  "/create-login/:employeeId",
-  verifyToken,
-  allowRoles("employer", "admin", "hr"),
-  c.createEmployeeLogin,
-);
-router.get(
-  "/all",
-  verifyToken,
-  allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
-  c.getEmployees,
-);
-router.get("/:id", verifyToken, c.getEmployeeById);
+
+router.get("/all", verifyToken, employeeController.getEmployees);
+router.get("/:id", verifyToken, employeeController.getEmployeeById);
+
 router.put(
   "/:id",
   verifyToken,
-  allowRoles("employer", "admin", "hr"),
-  c.updateEmployee,
+  profileUpload.single("profileImage"),
+  employeeController.updateEmployee
 );
+
+router.delete("/:id", verifyToken, employeeController.deleteEmployee);
+
 module.exports = router;

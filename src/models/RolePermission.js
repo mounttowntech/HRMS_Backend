@@ -1,11 +1,13 @@
 const mongoose = require("mongoose");
-const schema = new mongoose.Schema(
+
+const permissionSchema = new mongoose.Schema(
   {
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
     },
+
     roleName: {
       type: String,
       enum: [
@@ -18,25 +20,31 @@ const schema = new mongoose.Schema(
       ],
       required: true,
     },
+
     permissions: {
-      dashboard: { type: Boolean, default: true },
-      createCompany: { type: Boolean, default: false },
-      createRoles: { type: Boolean, default: false },
-      addEmployees: { type: Boolean, default: false },
-      assignProjects: { type: Boolean, default: false },
-      monitorWork: { type: Boolean, default: false },
-      approveLeave: { type: Boolean, default: false },
-      processPayroll: { type: Boolean, default: false },
-      generateReports: { type: Boolean, default: false },
-      punchAttendance: { type: Boolean, default: false },
-      viewTasks: { type: Boolean, default: false },
-      completeWork: { type: Boolean, default: false },
-      applyLeave: { type: Boolean, default: false },
-      uploadDocuments: { type: Boolean, default: false },
-      downloadPayslip: { type: Boolean, default: false },
+      dashboard: [{ type: String }],
+      employees: [{ type: String }],
+      departments: [{ type: String }],
+      attendance: [{ type: String }],
+      leave: [{ type: String }],
+      payroll: [{ type: String }],
+      projects: [{ type: String }],
+      tasks: [{ type: String }],
+      documents: [{ type: String }],
+      assets: [{ type: String }],
+      recruitment: [{ type: String }],
+      onboarding: [{ type: String }],
+      announcements: [{ type: String }],
+      notifications: [{ type: String }],
+      calendar: [{ type: String }],
+      analytics: [{ type: String }],
+      reports: [{ type: String }],
+      roles: [{ type: String }]
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
-schema.index({ companyId: 1, roleName: 1 }, { unique: true });
-module.exports = mongoose.model("RolePermission", schema);
+
+permissionSchema.index({ companyId: 1, roleName: 1 }, { unique: true });
+
+module.exports = mongoose.model("RolePermission", permissionSchema);

@@ -4,7 +4,6 @@ const mongoose = require("mongoose");
 const app = require("./app");
 
 
-
 const mongoURI =
   process.env.NODE_ENV === "production"
     ? process.env.MONGODB_ATLAS

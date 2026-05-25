@@ -2,45 +2,44 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const uploadPath = "uploads/documents";
+const uploadPath = "uploads/profile";
 
 if (!fs.existsSync(uploadPath)) {
   fs.mkdirSync(uploadPath, { recursive: true });
 }
 
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
+  destination: (req, file, cb) => {
     cb(null, uploadPath);
   },
 
-  filename: function (req, file, cb) {
-    const uniqueName =
-      Date.now() + "-" + Math.round(Math.random() * 1e9);
-
-    cb(null, uniqueName + path.extname(file.originalname));
+  filename: (req, file, cb) => {
+    const fileName = Date.now() + path.extname(file.originalname);
+    cb(null, fileName);
   },
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|jpg|jpeg|png|doc|docx/;
+  const allowedTypes = [
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/webp",
+  ];
 
-  const extName = allowedTypes.test(
-    path.extname(file.originalname).toLowerCase()
-  );
-
-  if (extName) {
+  if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only PDF, JPG, PNG, DOC, DOCX files are allowed"));
+    cb(new Error("Only image files allowed"), false);
   }
 };
 
-const upload = multer({
+const profileUpload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024,
+    fileSize: 2 * 1024 * 1024,
   },
 });
 
-module.exports = upload;
+module.exports = profileUpload;

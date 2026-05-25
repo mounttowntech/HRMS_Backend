@@ -1,12 +1,12 @@
 const router = require("express").Router();
 const c = require("../controllers/dashboardController");
 const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
-router.get(
-  "/employer",
-  verifyToken,
-  allowRoles("employer"),
-  c.employerDashboard,
-);
+// router.get(
+//   "/employer",
+//   verifyToken,
+//   allowRoles("employer"),
+//   c.employerDashboard,
+// );
 router.get(
   "/admin",
   verifyToken,
@@ -31,10 +31,10 @@ router.get(
   allowRoles("teamlead", "admin", "employer"),
   c.teamLeadDashboard,
 );
-router.get(
-  "/project-manager",
-  verifyToken,
-  allowRoles("projectmanager", "admin", "employer"),
-  c.projectManagerDashboard,
-);
+// router.get(
+//   "/project-manager",
+//   verifyToken,
+//   allowRoles("projectmanager", "admin", "employer"),
+//   c.projectManagerDashboard,
+// );
 module.exports = router;

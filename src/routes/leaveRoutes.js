@@ -5,7 +5,7 @@ router.post("/apply", verifyToken, c.applyLeave);
 router.patch(
   "/:id/manager-approval",
   verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin"),
+  allowRoles("teamlead", "projectmanager", "admin","hr"),
   c.managerApproval,
 );
 router.patch(
@@ -15,7 +15,7 @@ router.patch(
   c.hrApproval,
 );
 router.get(
-  "/",
+  "/all",
   verifyToken,
   allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
   c.getLeaves,

@@ -1,108 +1,220 @@
 const Employee = require("../models/Employee");
 const User = require("../models/User");
+const Shift = require("../models/shiftModel");
 const sendMail = require("../utils/sendMail");
 
 const employeeCredentialsTemplate = require(
   "../templates/employeeCredentialTemplate"
 );
-exports.createEmployee = async (req, res) => {
-  try {
-    const count = await Employee.countDocuments({
-      companyId: req.user.companyId,
-    });
-    const employee = await Employee.create({
-      ...req.body,
-      companyId: req.user.companyId,
-      employeeCode: `EMP${String(count + 1).padStart(4, "0")}`,
-    });
-    res
-      .status(201)
-      .json({ success: true, message: "Employee added", employee });
-  } catch (e) {
-    res.status(500).json({ success: false, message: e.message });
-  }
+
+// ==============================
+// POPULATE EMPLOYEE
+// ==============================
+const populateEmployee = (query) => {
+  return query
+    .populate("departmentId", "name")
+    .populate("designationId", "name")
+    .populate(
+      "shiftId",
+      "shiftName shiftType startTime endTime graceMinutes weekOff status"
+    )
+    .populate("reportingManager", "fullName email employeeCode")
+    .populate("projectManager", "fullName email employeeCode");
 };
 
-exports.createEmployeeLogin = async (req, res) => {
-  try {
-    const employee = await Employee.findById(
-      req.params.employeeId
+// ==============================
+// DUPLICATE-SAFE ID GENERATOR
+// ==============================
+const generateEmployeeIds = async (companyId) => {
+  let nextNumber = 1;
+  let employeeCode;
+  let biometricUserId;
+  let exists = true;
+
+  const lastEmployee = await Employee.findOne({ companyId })
+    .sort({ createdAt: -1 })
+    .select("employeeCode");
+
+  if (lastEmployee?.employeeCode) {
+    const lastNumber = parseInt(
+      lastEmployee.employeeCode.replace("EMP", ""),
+      10
     );
 
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found",
-      });
+    if (!isNaN(lastNumber)) {
+      nextNumber = lastNumber + 1;
     }
+  }
 
-    // check already linked
-    if (employee.userId) {
-      return res.status(400).json({
-        success: false,
-        message: "Login already created",
-      });
-    }
+  while (exists) {
+    const padded = String(nextNumber).padStart(4, "0");
 
-    // default password
-    const password = "Welcome@123";
+    employeeCode = `EMP${padded}`;
+    biometricUserId = `BIO${padded}`;
 
-    // create user
-    const user = await User.create({
-      companyId: employee.companyId,
-      employeeId: employee._id,
-      name: employee.fullName,
-      email: employee.email,
-      phone: employee.phone,
-      password,
-      role: employee.role || "employee",
+    exists = await Employee.findOne({
+      companyId,
+      $or: [{ employeeCode }, { biometricUserId }],
     });
 
-    // update employee
+    if (exists) {
+      nextNumber++;
+    }
+  }
+
+  return {
+    employeeCode,
+    biometricUserId,
+  };
+};
+
+// ==============================
+// CREATE EMPLOYEE
+// ==============================
+exports.createEmployee = async (req, res) => {
+  try {
+    const { employeeCode, biometricUserId } = await generateEmployeeIds(
+      req.user.companyId
+    );
+
+    const password = req.body.password || "Welcome@123";
+
+    const email = req.body.email?.trim().toLowerCase();
+
+    if (!email || !req.body.fullName || !req.body.departmentId || !req.body.designationId) {
+      return res.status(400).json({
+        success: false,
+        message: "fullName, email, departmentId and designationId are required",
+      });
+    }
+
+    const existingEmployee = await Employee.findOne({
+      email,
+      companyId: req.user.companyId,
+    });
+
+    if (existingEmployee) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee already exists with this email",
+      });
+    }
+
+    if (req.body.shiftId) {
+      const shift = await Shift.findOne({
+        _id: req.body.shiftId,
+        companyId: req.user.companyId,
+      });
+
+      if (!shift) {
+        return res.status(404).json({
+          success: false,
+          message: "Shift not found",
+        });
+      }
+    }
+
+    const profileImage = req.file
+      ? `/uploads/profile/${req.file.filename}`
+      : "";
+
+    const employee = await Employee.create({
+      companyId: req.user.companyId,
+      employeeCode,
+      biometricUserId,
+      fullName: req.body.fullName,
+      email,
+      phone: req.body.phone,
+      profileImage,
+      joiningDate: req.body.joiningDate || Date.now(),
+      shiftId: req.body.shiftId || null,
+      departmentId: req.body.departmentId,
+      designationId: req.body.designationId,
+      salary: req.body.salary || 0,
+      role: req.body.role || "employee",
+      attendanceMode: req.body.attendanceMode || "employee_login",
+      reportingManager: req.body.reportingManager || null,
+      projectManager: req.body.projectManager || null,
+      status: req.body.status || "active",
+      leaveBalance: req.body.leaveBalance || {
+        sick: 10,
+        casual: 12,
+        earned: 15,
+      },
+    });
+
+    let user = await User.findOne({ email: employee.email });
+
+    if (!user) {
+      user = await User.create({
+        companyId: employee.companyId,
+        employeeId: employee._id,
+        name: employee.fullName,
+        email: employee.email,
+        phone: employee.phone,
+        password,
+        role: employee.role,
+        isActive: true,
+      });
+    }
+
     employee.userId = user._id;
-
-    employee.status = "active";
-
     await employee.save();
 
-    // SEND EMAIL TEMPLATE
     await sendMail({
       to: employee.email,
-      subject: "Employee Login Credentials",
+      subject: "HRMS Login Credentials",
       html: employeeCredentialsTemplate(
         employee.fullName,
         employee.email,
         password,
-        "Mounttown Technologies"
+        "Mounttown HRMS"
       ),
     });
 
-    return res.status(201).json({
+    const populatedEmployee = await populateEmployee(
+      Employee.findById(employee._id)
+    );
+
+    res.status(201).json({
       success: true,
-      message:
-        "Employee login created and email sent",
-      user,
-      employee,
+      message: "Employee created and login credentials sent",
+      employee: populatedEmployee,
+      login: {
+        email: employee.email,
+        password,
+      },
     });
   } catch (error) {
-    return res.status(500).json({
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Duplicate employeeCode, biometricUserId or email. Please try again.",
+      });
+    }
+
+    res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
 
+// ==============================
+// GET ALL EMPLOYEES
+// ==============================
 exports.getEmployees = async (req, res) => {
   try {
-    const employees = await Employee.find({
-      companyId: req.user.companyId,
-    })
-      .populate("reportingManager", "fullName email role designation")
-      .populate("projectManager", "fullName email role designation")
-      .populate("userId", "name email role isActive");
+    const employees = await populateEmployee(
+      Employee.find({
+        companyId: req.user.companyId,
+      }).sort({ createdAt: -1 })
+    );
 
     res.status(200).json({
       success: true,
+      count: employees.length,
       employees,
     });
   } catch (error) {
@@ -112,37 +224,18 @@ exports.getEmployees = async (req, res) => {
     });
   }
 };
-exports.getEmployeeById = async (req, res) =>
-  res.json({
-    success: true,
-    employee: await Employee.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    }),
-  });
 
-
-exports.updateEmployee = async (req, res) => {
+// ==============================
+// GET EMPLOYEE BY ID
+// ==============================
+exports.getEmployeeById = async (req, res) => {
   try {
-    const employee = await Employee.findOneAndUpdate(
-      {
+    const employee = await populateEmployee(
+      Employee.findOne({
         _id: req.params.id,
         companyId: req.user.companyId,
-      },
-      req.body,
-      {
-        new: true,
-        runValidators: true,
-      }
-    )
-      .populate(
-        "reportingManager",
-        "fullName email designation"
-      )
-      .populate(
-        "projectManager",
-        "fullName email designation"
-      );
+      })
+    );
 
     if (!employee) {
       return res.status(404).json({
@@ -153,8 +246,125 @@ exports.updateEmployee = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      employee,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==============================
+// UPDATE EMPLOYEE
+// ==============================
+exports.updateEmployee = async (req, res) => {
+  try {
+    if (req.body.shiftId) {
+      const shift = await Shift.findOne({
+        _id: req.body.shiftId,
+        companyId: req.user.companyId,
+      });
+
+      if (!shift) {
+        return res.status(404).json({
+          success: false,
+          message: "Shift not found",
+        });
+      }
+    }
+
+    const updateData = {
+      ...req.body,
+    };
+
+    delete updateData.employeeCode;
+    delete updateData.biometricUserId;
+
+    if (updateData.email) {
+      updateData.email = updateData.email.trim().toLowerCase();
+    }
+
+    if (req.file) {
+      updateData.profileImage = `/uploads/profile/${req.file.filename}`;
+    }
+
+    const employee = await populateEmployee(
+      Employee.findOneAndUpdate(
+        {
+          _id: req.params.id,
+          companyId: req.user.companyId,
+        },
+        updateData,
+        {
+          new: true,
+          runValidators: true,
+        }
+      )
+    );
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    await User.findOneAndUpdate(
+      { employeeId: employee._id },
+      {
+        name: employee.fullName,
+        email: employee.email,
+        phone: employee.phone,
+        role: employee.role,
+      }
+    );
+
+    res.status(200).json({
+      success: true,
       message: "Employee updated successfully",
       employee,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: "Duplicate email or unique field found",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==============================
+// DELETE EMPLOYEE
+// ==============================
+exports.deleteEmployee = async (req, res) => {
+  try {
+    const employee = await Employee.findOneAndDelete({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    await User.findOneAndDelete({
+      employeeId: employee._id,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Employee and login deleted successfully",
     });
   } catch (error) {
     res.status(500).json({

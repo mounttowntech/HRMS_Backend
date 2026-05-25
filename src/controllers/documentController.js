@@ -1,32 +1,57 @@
 const Document = require("../models/Document");
 
-exports.uploadDocument = async (req, res) => {
+exports.uploadDocument = async (
+  req,
+  res
+) => {
   try {
+    console.log("FILE:", req.file);
+
+    console.log("BODY:", req.body);
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "Document file is required",
+        message:
+          "Document file is required",
       });
     }
 
-    const document = await Document.create({
-      companyId: req.user.companyId,
-      employeeId: req.user.employeeId || req.body.employeeId,
-      documentType: req.body.documentType,
+    const document =
+      await Document.create({
+        companyId: req.user.companyId,
 
-      fileName: req.file.filename,
-      originalName: req.file.originalname,
-      fileUrl: `/uploads/documents/${req.file.filename}`,
-      mimeType: req.file.mimetype,
-      fileSize: req.file.size,
-    });
+        employeeId:
+          req.user.employeeId ||
+          req.body.employeeId,
+
+        documentType:
+          req.body.documentType,
+
+        fileName: req.file.filename,
+
+        originalName:
+          req.file.originalname,
+
+        fileUrl: `/uploads/documents/${req.file.filename}`,
+
+        mimeType: req.file.mimetype,
+
+        fileSize: req.file.size,
+      });
 
     res.status(201).json({
       success: true,
-      message: "Document uploaded successfully",
+      message:
+        "Document uploaded successfully",
       document,
     });
   } catch (error) {
+    console.log(
+      "UPLOAD ERROR:",
+      error
+    );
+
     res.status(500).json({
       success: false,
       message: error.message,
