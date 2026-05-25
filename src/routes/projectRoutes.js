@@ -4,13 +4,13 @@ const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 router.post(
   "/create",
   verifyToken,
-  allowRoles("admin", "teamlead"),
+  allowRoles("admin","projectmanager","teamlead"),
   c.createProject,
 );
 router.patch(
   "/:id/assign",
   verifyToken,
-  allowRoles("admin", "teamlead"),
+  allowRoles("admin","projectmanager","teamlead"),
   c.assignProject,
 );
 router.get("/all", verifyToken, c.getProjects);

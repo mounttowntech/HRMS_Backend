@@ -51,6 +51,7 @@ exports.assignProject = async (req, res) => {
     )
       .populate("assignedBy", "fullName designation")
       .populate("teamlead", "fullName designation")
+      .populate("projectmanager","fullName designation")
       .populate("teamMembers", "fullName designation");
 
     if (!project) {
@@ -84,6 +85,7 @@ exports.getProjects = async (req, res) => {
       companyId: req.user.companyId,
     })
       .populate("assignedBy", "fullName designation")
+      .populate("projectmanager","fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation")
       .sort({ createdAt: -1 });
@@ -113,6 +115,7 @@ exports.getSingleProject = async (req, res) => {
       companyId: req.user.companyId,
     })
       .populate("assignedBy", "fullName designation")
+      .populate("projectmanager","fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation");
 
@@ -153,6 +156,7 @@ exports.updateProject = async (req, res) => {
       }
     )
       .populate("assignedBy", "fullName designation")
+      .populate("projectmanager","fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation");
 
