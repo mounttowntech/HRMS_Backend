@@ -2,11 +2,7 @@ const mongoose = require("mongoose");
 
 const industryTypeSchema = new mongoose.Schema(
   {
-    companyId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Company",
-      required: true,
-    },
+    
 
     name: {
       type: String,

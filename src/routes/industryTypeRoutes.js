@@ -1,51 +1,60 @@
 const express = require("express");
+
 const router = express.Router();
 
 const {
   createIndustryType,
   getIndustryTypes,
-  getIndustryTypeById,
+  getSingleIndustryType,
   updateIndustryType,
   deleteIndustryType,
 } = require("../controllers/industryTypeController");
 
-const { verifyToken , allowRoles } = require("../middleware/authMiddleware");
+const { verifyToken } = require("../middleware/authMiddleware");
 
+
+// ======================================
+// CREATE INDUSTRY TYPE
+// ======================================
 router.post(
   "/create",
   verifyToken,
-  allowRoles("admin", "hr", "projectmanager"),
   createIndustryType
 );
 
+// ======================================
+// GET ALL INDUSTRY TYPES
+// ======================================
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr", "projectmanager", "teamlead"),
   getIndustryTypes
 );
+
+// ======================================
+// GET SINGLE INDUSTRY TYPE
+// ======================================
 router.get(
   "/:id",
   verifyToken,
-  allowRoles(
-    "admin",
-    "hr",
-    "projectmanager",
-    "teamlead"
-  ),
-  getIndustryTypeById
+  getSingleIndustryType
 );
+
+// ======================================
+// UPDATE INDUSTRY TYPE
+// ======================================
 router.put(
   "/update/:id",
   verifyToken,
-  allowRoles("admin", "projectmanager"),
   updateIndustryType
 );
 
+// ======================================
+// DELETE INDUSTRY TYPE
+// ======================================
 router.delete(
   "/delete/:id",
   verifyToken,
-  allowRoles("admin"),
   deleteIndustryType
 );
 

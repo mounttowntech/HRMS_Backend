@@ -3,10 +3,9 @@ const router = express.Router();
 
 const {
   createCompany,
-  getAllCompanies,
-  getCompanyById,
+  getCompanies,
+  getSingleCompany,
   updateCompany,
-  changeCompanyStatus,
   deleteCompany,
 } = require("../controllers/companyController");
 
@@ -26,7 +25,7 @@ router.get(
   "/all",
   verifyToken,
   allowRoles("admin", "hr"),
-  getAllCompanies
+  getCompanies
 );
 
 // GET COMPANY BY ID
@@ -34,7 +33,7 @@ router.get(
   "/:id",
   verifyToken,
   allowRoles("admin", "hr"),
-  getCompanyById
+  getSingleCompany
 );
 
 // UPDATE COMPANY
@@ -45,13 +44,6 @@ router.put(
   updateCompany
 );
 
-// CHANGE COMPANY STATUS
-router.put(
-  "/status/:id",
-  verifyToken,
-  allowRoles("admin"),
-  changeCompanyStatus
-);
 
 // DELETE COMPANY
 router.delete(
