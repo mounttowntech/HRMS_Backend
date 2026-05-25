@@ -2,19 +2,12 @@ const mongoose = require("mongoose");
 const schema = new mongoose.Schema(
   {
     companyName: { type: String, required: true },
-    industryType: {
-      type: String,
-      enum: [
-        "IT",
-        "BPO",
-        "School",
-        "College",
-        "Finance",
-        "International Voice Process",
-        "Other",
-      ],
-      default: "IT",
+    industryTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "IndustryType",
+      required: true,
     },
+
     email: { type: String, required: true, lowercase: true },
     phone: String,
     address: String,

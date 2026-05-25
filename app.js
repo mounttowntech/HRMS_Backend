@@ -33,4 +33,6 @@ app.use("/api/notifications", require("./src/routes/notificationRoutes"));
 app.use("/api/designations",require("./src/routes/designationRoutes"));
 app.use("/api/shifts", require("./src/routes/shiftRoutes"));
 app.use("/api/analytics",require("./src/routes/analyticsRoutes"));
+app.use("/api/industry-types", require("./src/routes/industryTypeRoutes"));
+app.use("/api/clients",require("./src/routes/clientRoutes"));
 module.exports = app;
