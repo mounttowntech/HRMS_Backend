@@ -39,7 +39,7 @@ const permissionSchema = new mongoose.Schema(
       calendar: [{ type: String }],
       analytics: [{ type: String }],
       reports: [{ type: String }],
-      roles: [{ type: String }]
+      roles: [{ type: String }],
     },
   },
   { timestamps: true }

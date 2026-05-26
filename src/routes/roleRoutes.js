@@ -9,12 +9,38 @@ const {
   deleteRole,
 } = require("../controllers/roleController");
 
-const { verifyToken } = require("../middleware/authMiddleware");
+const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 
-router.post("/create", verifyToken, createRole);
-router.get("/all", verifyToken, getRoles);
-router.get("/:id", verifyToken, getRoleById);
-router.put("/:id", verifyToken, updateRole);
-router.delete("/:id", verifyToken, deleteRole);
+router.post("/create", verifyToken, allowRoles("admin"), createRole);
+
+router.get(
+  "/all",
+  verifyToken,
+  allowRoles("admin", "hr"),
+  getRoles
+);
+
+router.get(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr"),
+  getRoleById
+);
+
+router.put("/", verifyToken, allowRoles("admin"), updateRole);
+
+router.put(
+  "/:id",
+  verifyToken,
+  allowRoles("admin"),
+  updateRole
+);
+
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("admin"),
+  deleteRole
+);
 
 module.exports = router;
