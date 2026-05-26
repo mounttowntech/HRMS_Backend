@@ -85,9 +85,10 @@ exports.getProjects = async (req, res) => {
       companyId: req.user.companyId,
     })
       .populate("assignedBy", "fullName designation")
-      .populate("projectmanager","fullName designation")
+      .populate("projectmanager", "fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation")
+      .populate("clientId", "clientName") // 👈 add this
       .sort({ createdAt: -1 });
 
     res.json({
@@ -145,22 +146,27 @@ exports.getSingleProject = async (req, res) => {
 // ======================================
 exports.updateProject = async (req, res) => {
   try {
-    const project = await Project.findOneAndUpdate(
+    const projectId = req.params.id;
+    const companyId = req.user.companyId;
+
+    const updatedProject = await Project.findOneAndUpdate(
       {
-        _id: req.params.id,
-        companyId: req.user.companyId,
+        _id: projectId,
+        companyId,
       },
       req.body,
       {
         new: true,
+        runValidators: true,
       }
     )
+      .populate("clientId", "clientName")
       .populate("assignedBy", "fullName designation")
-      .populate("projectmanager","fullName designation")
+      .populate("projectmanager", "fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation");
 
-    if (!project) {
+    if (!updatedProject) {
       return res.status(404).json({
         success: false,
         message: "Project not found",
@@ -170,7 +176,7 @@ exports.updateProject = async (req, res) => {
     res.json({
       success: true,
       message: "Project updated successfully",
-      project,
+      project: updatedProject,
     });
   } catch (error) {
     console.log("UPDATE PROJECT ERROR:", error);

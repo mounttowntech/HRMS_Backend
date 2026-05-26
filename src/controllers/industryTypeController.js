@@ -49,9 +49,7 @@ exports.getIndustryTypes = async (req, res) => {
   try {
     const industryTypes = await IndustryType.find()
 
-      .populate("createdBy", "name email role")
-
-      .sort({ createdAt: -1 });
+      .populate("createdBy", "name email role");
 
     res.status(200).json({
       success: true,
