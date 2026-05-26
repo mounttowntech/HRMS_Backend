@@ -36,8 +36,6 @@ exports.createShift = async (req, res) => {
 // GET ALL SHIFTS
 exports.getShifts = async (req, res) => {
   try {
-
-
     const allShifts = await Shift.find({});
 
     const shifts = await Shift.find({
@@ -46,12 +44,12 @@ exports.getShifts = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      collectionName: Shift.collection.name,
-      tokenCompanyId: req.user.companyId,
-      totalInThisCollection: allShifts.length,
-      count: shifts.length,
+      // collectionName: Shift.collection.name,
+      // tokenCompanyId: req.user.companyId,
+      // totalInThisCollection: allShifts.length,
+      count: allShifts.length,
       allShifts,
-      shifts,
+      // shifts,
     });
   } catch (error) {
     res.status(500).json({
@@ -124,7 +122,7 @@ exports.updateShift = async (req, res) => {
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
 
     if (!shift) {
