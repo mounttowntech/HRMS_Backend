@@ -25,11 +25,12 @@ const verifyToken = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = {
+      _id: decoded.id,
       id: decoded.id,
       role: decoded.role,
       email: decoded.email,
-      companyId: decoded.companyId,
-      employeeId: decoded.employeeId,
+      companyId: decoded.companyId || null,
+      employeeId: decoded.employeeId || null,
     };
 
     next();
