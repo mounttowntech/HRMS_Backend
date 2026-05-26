@@ -2,21 +2,14 @@ const mongoose = require("mongoose");
 const Shift = require("../models/shiftModel");
 exports.createShift = async (req, res) => {
   try {
-    if (!req.user.companyId) {
-      return res.status(400).json({
-        success: false,
-        message: "companyId missing in token",
-      });
-    }
-
     const shift = await Shift.create({
       companyId: req.user.companyId,
       shiftName: req.body.shiftName,
       shiftType: req.body.shiftType,
       startTime: req.body.startTime,
       endTime: req.body.endTime,
-      graceMinutes: req.body.graceMinutes || 0,
-      weekOff: req.body.weekOff || [],
+      graceMinutes: req.body.graceMinutes,
+      weekOff: req.body.weekOff,
       status: req.body.status || "active",
     });
 
