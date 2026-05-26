@@ -85,9 +85,10 @@ exports.getProjects = async (req, res) => {
       companyId: req.user.companyId,
     })
       .populate("assignedBy", "fullName designation")
-      .populate("projectmanager","fullName designation")
+      .populate("projectmanager", "fullName designation")
       .populate("teamlead", "fullName designation")
       .populate("teamMembers", "fullName designation")
+      .populate("clientId", "clientName") // 👈 add this
       .sort({ createdAt: -1 });
 
     res.json({
