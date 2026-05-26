@@ -1,9 +1,112 @@
 const RolePermission = require("../models/RolePermission");
 
+const defaultRolePermissions = [
+  {
+    roleName: "admin",
+    permissions: {
+      dashboard: ["read"],
+      employees: ["create", "read", "update", "delete"],
+      departments: ["create", "read", "update", "delete"],
+      attendance: ["create", "read", "update", "delete"],
+      leave: ["read", "approve", "reject"],
+      payroll: ["create", "read", "update", "publish"],
+      projects: ["create", "read", "update", "delete", "assign"],
+      tasks: ["create", "read", "update", "delete", "assign", "review"],
+      documents: ["create", "read", "verify", "delete"],
+      assets: ["create", "read", "update", "assign", "delete"],
+      recruitment: ["create", "read", "update", "delete", "hire"],
+      onboarding: ["create", "read", "update", "activate"],
+      announcements: ["create", "read", "update", "delete"],
+      notifications: ["create", "read", "delete"],
+      calendar: ["create", "read", "update", "delete"],
+      analytics: ["read"],
+      reports: ["read"],
+      roles: ["create", "read", "update", "delete"],
+    },
+  },
+  {
+    roleName: "hr",
+    permissions: {
+      dashboard: ["read"],
+      employees: ["create", "read", "update"],
+      departments: ["read"],
+      attendance: ["read", "update"],
+      leave: ["read", "approve", "reject"],
+      payroll: ["read", "generate", "publish"],
+      projects: ["read"],
+      tasks: ["read"],
+      documents: ["create", "read", "verify"],
+      assets: ["read", "assign"],
+      recruitment: ["create", "read", "update", "hire"],
+      onboarding: ["create", "read", "update", "activate"],
+      announcements: ["create", "read", "update"],
+      notifications: ["create", "read"],
+      calendar: ["create", "read"],
+      analytics: ["read"],
+      reports: ["read"],
+      roles: [],
+    },
+  },
+  {
+    roleName: "teamlead",
+    permissions: {
+      dashboard: ["read"],
+      employees: ["read"],
+      departments: ["read"],
+      attendance: ["read"],
+      leave: ["read", "approve", "reject"],
+      payroll: [],
+      projects: ["read"],
+      tasks: ["create", "read", "update", "assign", "review"],
+      documents: ["read"],
+      assets: ["read"],
+      recruitment: ["read"],
+      onboarding: ["read"],
+      announcements: ["read"],
+      notifications: ["read"],
+      calendar: ["read"],
+      analytics: ["read"],
+      reports: ["read"],
+      roles: [],
+    },
+  },
+  {
+    roleName: "employee",
+    permissions: {
+      dashboard: ["read"],
+      employees: [],
+      departments: [],
+      attendance: ["create", "read"],
+      leave: ["create", "read"],
+      payroll: ["read", "download"],
+      projects: [],
+      tasks: ["read", "update"],
+      documents: ["create", "read"],
+      assets: [],
+      recruitment: [],
+      onboarding: [],
+      announcements: ["read"],
+      notifications: ["read"],
+      calendar: ["read"],
+      analytics: [],
+      reports: [],
+      roles: [],
+    },
+  },
+];
+
 // CREATE ROLE
 exports.createRole = async (req, res) => {
   try {
     const { roleName, permissions } = req.body;
+    const companyId = req.user.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId missing in token",
+      });
+    }
 
     if (!roleName) {
       return res.status(400).json({
@@ -13,30 +116,79 @@ exports.createRole = async (req, res) => {
     }
 
     const existingRole = await RolePermission.findOne({
-      companyId: req.user.companyId,
+      companyId,
       roleName,
     });
 
     if (existingRole) {
       return res.status(400).json({
         success: false,
-        message: "Role already exists",
+        message: "Role already exists for this company",
       });
     }
 
     const role = await RolePermission.create({
-      companyId: req.user.companyId,
+      companyId,
       roleName,
-      permissions,
+      permissions: permissions || {},
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Role created successfully",
       role,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// CREATE DEFAULT ROLES
+exports.createDefaultRoles = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId missing in token",
+      });
+    }
+
+    const createdRoles = [];
+
+    for (const item of defaultRolePermissions) {
+      const role = await RolePermission.findOneAndUpdate(
+        {
+          companyId,
+          roleName: item.roleName,
+        },
+        {
+          companyId,
+          roleName: item.roleName,
+          permissions: item.permissions,
+        },
+        {
+          new: true,
+          upsert: true,
+          runValidators: true,
+        }
+      );
+
+      createdRoles.push(role);
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Default roles created/updated successfully",
+      count: createdRoles.length,
+      roles: createdRoles,
+    });
+  } catch (error) {
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -46,17 +198,38 @@ exports.createRole = async (req, res) => {
 // GET ALL ROLES
 exports.getRoles = async (req, res) => {
   try {
-    const roles = await RolePermission.find({
-      companyId: req.user.companyId,
-    });
+    const companyId = req.user.companyId;
 
-    res.status(200).json({
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId missing in token",
+      });
+    }
+
+    let roles = await RolePermission.find({ companyId });
+
+    if (roles.length === 0) {
+      const insertData = defaultRolePermissions.map((role) => ({
+        companyId,
+        roleName: role.roleName,
+        permissions: role.permissions,
+      }));
+
+      await RolePermission.insertMany(insertData);
+
+      roles = await RolePermission.find({ companyId }).sort({
+        createdAt: 1,
+      });
+    }
+
+    return res.status(200).json({
       success: true,
       count: roles.length,
       roles,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -66,9 +239,11 @@ exports.getRoles = async (req, res) => {
 // GET ROLE BY ID
 exports.getRoleById = async (req, res) => {
   try {
+    const companyId = req.user.companyId;
+
     const role = await RolePermission.findOne({
       _id: req.params.id,
-      companyId: req.user.companyId,
+      companyId,
     });
 
     if (!role) {
@@ -78,12 +253,12 @@ exports.getRoleById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       role,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -94,11 +269,12 @@ exports.getRoleById = async (req, res) => {
 exports.updateRole = async (req, res) => {
   try {
     const { roleName, permissions } = req.body;
+    const companyId = req.user.companyId;
 
     const role = await RolePermission.findOneAndUpdate(
       {
         _id: req.params.id,
-        companyId: req.user.companyId,
+        companyId,
       },
       {
         ...(roleName && { roleName }),
@@ -117,13 +293,13 @@ exports.updateRole = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Role updated successfully",
       role,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -133,9 +309,11 @@ exports.updateRole = async (req, res) => {
 // DELETE ROLE
 exports.deleteRole = async (req, res) => {
   try {
+    const companyId = req.user.companyId;
+
     const role = await RolePermission.findOneAndDelete({
       _id: req.params.id,
-      companyId: req.user.companyId,
+      companyId,
     });
 
     if (!role) {
@@ -145,12 +323,13 @@ exports.deleteRole = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Role deleted successfully",
+      deletedRole: role,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

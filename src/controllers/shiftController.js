@@ -1,15 +1,22 @@
+const mongoose = require("mongoose");
 const Shift = require("../models/shiftModel");
-
 exports.createShift = async (req, res) => {
   try {
+    if (!req.user.companyId) {
+      return res.status(400).json({
+        success: false,
+        message: "companyId missing in token",
+      });
+    }
+
     const shift = await Shift.create({
       companyId: req.user.companyId,
       shiftName: req.body.shiftName,
       shiftType: req.body.shiftType,
       startTime: req.body.startTime,
       endTime: req.body.endTime,
-      graceMinutes: req.body.graceMinutes,
-      weekOff: req.body.weekOff,
+      graceMinutes: req.body.graceMinutes || 0,
+      weekOff: req.body.weekOff || [],
       status: req.body.status || "active",
     });
 
@@ -26,15 +33,24 @@ exports.createShift = async (req, res) => {
   }
 };
 
+// GET ALL SHIFTS
 exports.getShifts = async (req, res) => {
   try {
+
+
+    const allShifts = await Shift.find({});
+
     const shifts = await Shift.find({
       companyId: req.user.companyId,
     });
 
     res.status(200).json({
       success: true,
+      collectionName: Shift.collection.name,
+      tokenCompanyId: req.user.companyId,
+      totalInThisCollection: allShifts.length,
       count: shifts.length,
+      allShifts,
       shifts,
     });
   } catch (error) {
@@ -45,6 +61,7 @@ exports.getShifts = async (req, res) => {
   }
 };
 
+// GET SINGLE SHIFT
 exports.getShiftById = async (req, res) => {
   try {
     const shift = await Shift.findOne({
@@ -71,21 +88,38 @@ exports.getShiftById = async (req, res) => {
   }
 };
 
+// UPDATE SHIFT
 exports.updateShift = async (req, res) => {
   try {
+    const allowedFields = [
+      "shiftName",
+      "shiftType",
+      "startTime",
+      "endTime",
+      "graceMinutes",
+      "weekOff",
+      "status",
+    ];
+
+    const updateData = {};
+
+    allowedFields.forEach((field) => {
+      if (
+        req.body[field] !== undefined &&
+        req.body[field] !== null &&
+        req.body[field] !== ""
+      ) {
+        updateData[field] = req.body[field];
+      }
+    });
+
     const shift = await Shift.findOneAndUpdate(
       {
         _id: req.params.id,
         companyId: req.user.companyId,
       },
       {
-        shiftName: req.body.shiftName,
-        shiftType: req.body.shiftType,
-        startTime: req.body.startTime,
-        endTime: req.body.endTime,
-        graceMinutes: req.body.graceMinutes,
-        weekOff: req.body.weekOff,
-        status: req.body.status,
+        $set: updateData,
       },
       {
         new: true,
@@ -113,6 +147,7 @@ exports.updateShift = async (req, res) => {
   }
 };
 
+// DELETE SHIFT
 exports.deleteShift = async (req, res) => {
   try {
     const shift = await Shift.findOneAndDelete({
