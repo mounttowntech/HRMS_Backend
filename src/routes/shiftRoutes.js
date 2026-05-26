@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const shiftController = require("../controllers/shiftController");
-const { verifyToken } = require("../middleware/authMiddleware");
+const { verifyToken ,allowRoles} = require("../middleware/authMiddleware");
 
 router.post("/create", verifyToken, shiftController.createShift);
 router.get("/all", verifyToken, shiftController.getShifts);
