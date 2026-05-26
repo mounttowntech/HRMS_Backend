@@ -5,20 +5,51 @@ const Project = require("../models/Project");
 // ======================================
 exports.createProject = async (req, res) => {
   try {
-    const project = await Project.create({
-      ...req.body,
+    const {
+      clientId,
+      projectName,
+      description,
+      teamlead,
+      projectmanager,
+      teamMembers,
+      startDate,
+      dueDate,
+      progress,
+      status,
+    } = req.body;
 
-      // ✅ From logged in user
+    const project = await Project.create({
       companyId: req.user.companyId,
 
-      // ✅ Employee/Admin who created project
+      clientId,
+      projectName,
+      description,
+
+      // Logged-in employee
       assignedBy: req.user._id,
+
+      // From frontend
+      teamlead: teamlead || null,
+      projectmanager: projectmanager || null,
+      teamMembers: teamMembers || [],
+
+      startDate,
+      dueDate,
+      progress,
+      status,
     });
+
+    const populatedProject = await Project.findById(project._id)
+      .populate("clientId", "clientName")
+      .populate("assignedBy", "fullName designation")
+      .populate("projectmanager", "fullName designation")
+      .populate("teamlead", "fullName designation")
+      .populate("teamMembers", "fullName designation");
 
     res.status(201).json({
       success: true,
       message: "Project created successfully",
-      project,
+      project: populatedProject,
     });
   } catch (error) {
     console.log("CREATE PROJECT ERROR:", error);
