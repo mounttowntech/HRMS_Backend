@@ -149,12 +149,40 @@ exports.updateProject = async (req, res) => {
     const projectId = req.params.id;
     const companyId = req.user.companyId;
 
+    const allowedFields = [
+      "clientId",
+      "projectName",
+      "description",
+      "assignedBy",
+      "teamlead",
+      "projectmanager",
+      "teamMembers",
+      "startDate",
+      "dueDate",
+      "progress",
+      "status",
+    ];
+
+    const updateData = {};
+
+    allowedFields.forEach((field) => {
+      if (
+        req.body[field] !== undefined &&
+        req.body[field] !== null &&
+        req.body[field] !== ""
+      ) {
+        updateData[field] = req.body[field];
+      }
+    });
+
     const updatedProject = await Project.findOneAndUpdate(
       {
         _id: projectId,
         companyId,
       },
-      req.body,
+      {
+        $set: updateData,
+      },
       {
         new: true,
         runValidators: true,
