@@ -20,21 +20,28 @@ const projectSchema = new mongoose.Schema(
       trim: true,
     },
 
-    description: String,
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
     assignedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+      default: null,
     },
 
     teamlead: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+      default: null,
     },
 
     projectmanager: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
+      default: null,
     },
 
     teamMembers: [
@@ -44,32 +51,34 @@ const projectSchema = new mongoose.Schema(
       },
     ],
 
-    startDate: Date,
-    dueDate: Date,
+    startDate: {
+      type: Date,
+      default: null,
+    },
+
+    dueDate: {
+      type: Date,
+      default: null,
+    },
 
     progress: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 100,
     },
 
     status: {
       type: String,
-      enum: [
-        "created",
-        "assigned",
-        "in_progress",
-        "completed",
-        "closed",
-      ],
+      enum: ["created", "assigned", "in_progress", "completed", "closed"],
       default: "created",
     },
   },
   { timestamps: true }
 );
 
-projectSchema.index(
-  { companyId: 1, clientId: 1, projectName: 1 },
-  { unique: true }
-);
+// Normal index only for faster search, NOT unique
+projectSchema.index({ companyId: 1, clientId: 1 });
+projectSchema.index({ companyId: 1, projectName: 1 });
 
 module.exports = mongoose.model("Project", projectSchema);
