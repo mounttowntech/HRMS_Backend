@@ -416,3 +416,210 @@ exports.getMyLeaves = async (req, res) => {
     });
   }
 };
+// ======================================================
+// UPDATE LEAVE ROLE BASED
+// ======================================================
+
+exports.updateLeave = async (req, res) => {
+  try {
+    const loggedInUserId = req.user?.userId || req.user?.id;
+
+    const leave = await Leave.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!leave) {
+      return res.status(404).json({
+        success: false,
+        message: "Leave not found",
+      });
+    }
+
+    // approved leave cannot be edited
+    if (["approved", "rejected", "manager_rejected"].includes(leave.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Approved or rejected leave cannot be updated",
+      });
+    }
+
+    const emp = await Employee.findOne({
+      userId: loggedInUserId,
+      companyId: req.user.companyId,
+    });
+
+    if (!emp) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    // employee can update only own leave
+    if (
+      req.user.role === "employee" &&
+      leave.employeeId.toString() !== emp._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can update only your own leave",
+      });
+    }
+
+    // teamlead/projectmanager can update only team leave
+    if (req.user.role === "teamlead" || req.user.role === "projectmanager") {
+      const teamEmployee = await Employee.findOne({
+        _id: leave.employeeId,
+        companyId: req.user.companyId,
+        $or: [{ reportingManager: emp._id }, { projectManager: emp._id }],
+      });
+
+      if (!teamEmployee) {
+        return res.status(403).json({
+          success: false,
+          message: "You can update only your team employee leave",
+        });
+      }
+    }
+
+    const { leaveType, fromDate, toDate, reason, documentType } = req.body;
+
+    if (fromDate && toDate && new Date(fromDate) > new Date(toDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "fromDate cannot be greater than toDate",
+      });
+    }
+
+    if (leaveType) leave.leaveType = leaveType;
+    if (fromDate) leave.fromDate = fromDate;
+    if (toDate) leave.toDate = toDate;
+    if (reason) leave.reason = reason;
+
+    if (fromDate || toDate) {
+      leave.days = calculateDays(
+        fromDate || leave.fromDate,
+        toDate || leave.toDate
+      );
+    }
+
+    if (req.files && req.files.length > 0) {
+      const newDocuments = req.files.map((file) => ({
+        documentType: documentType || "other",
+        fileName: file.filename,
+        fileUrl: `/uploads/leaves/${file.filename}`,
+        mimeType: file.mimetype,
+      }));
+
+      leave.documents.push(...newDocuments);
+    }
+
+    leave.managerApproval = {
+      status: "pending",
+    };
+
+    leave.hrApproval = {
+      status: "pending",
+    };
+
+    leave.status = "pending_manager";
+
+    await leave.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Leave updated successfully",
+      leave,
+    });
+  } catch (error) {
+    console.log("UPDATE LEAVE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ======================================================
+// DELETE LEAVE ROLE BASED
+// ======================================================
+
+exports.deleteLeave = async (req, res) => {
+  try {
+    const loggedInUserId = req.user?.userId || req.user?.id;
+
+    const leave = await Leave.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!leave) {
+      return res.status(404).json({
+        success: false,
+        message: "Leave not found",
+      });
+    }
+
+    if (leave.status === "approved") {
+      return res.status(400).json({
+        success: false,
+        message: "Approved leave cannot be deleted",
+      });
+    }
+
+    const emp = await Employee.findOne({
+      userId: loggedInUserId,
+      companyId: req.user.companyId,
+    });
+
+    if (!emp && req.user.role !== "admin" && req.user.role !== "hr") {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    // employee can delete only own leave
+    if (
+      req.user.role === "employee" &&
+      leave.employeeId.toString() !== emp._id.toString()
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "You can delete only your own leave",
+      });
+    }
+
+    // teamlead/projectmanager can delete only team leave
+    if (req.user.role === "teamlead" || req.user.role === "projectmanager") {
+      const teamEmployee = await Employee.findOne({
+        _id: leave.employeeId,
+        companyId: req.user.companyId,
+        $or: [{ reportingManager: emp._id }, { projectManager: emp._id }],
+      });
+
+      if (!teamEmployee) {
+        return res.status(403).json({
+          success: false,
+          message: "You can delete only your team employee leave",
+        });
+      }
+    }
+
+    await Leave.findByIdAndDelete(leave._id);
+
+    res.status(200).json({
+      success: true,
+      message: "Leave deleted successfully",
+    });
+  } catch (error) {
+    console.log("DELETE LEAVE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

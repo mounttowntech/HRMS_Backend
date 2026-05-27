@@ -42,5 +42,18 @@ router.get(
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.getMyLeaves
 );
+router.put(
+  "/:id",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  leaveUpload.array("documents", 5),
+  c.updateLeave
+);
 
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.deleteLeave
+);
 module.exports = router;
