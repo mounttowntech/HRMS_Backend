@@ -49,12 +49,7 @@ router.put(
   leaveUpload.array("documents", 5),
   c.updateLeave
 );
-router.patch(
-  "/:id/approval",
-  verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin", "hr"),
-  c.approveLeave
-);
+
 router.delete(
   "/:id",
   verifyToken,
