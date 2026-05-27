@@ -4,14 +4,13 @@ const Attendance = require("../models/Attendance");
 const { calculateDays } = require("../utils/calcDays");
 const sendEmail = require("../utils/sendMail");
 const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
+
 // ======================================================
 // APPLY LEAVE
 // ======================================================
 
-
 exports.applyLeave = async (req, res) => {
   try {
-    // USER ID FROM TOKEN
     const userId = req.user?.userId || req.user?.id;
 
     if (!userId) {
@@ -21,9 +20,8 @@ exports.applyLeave = async (req, res) => {
       });
     }
 
-    // FIND EMPLOYEE USING LOGGED-IN USER ID
     const emp = await Employee.findOne({
-      userId: userId,
+      userId,
       companyId: req.user.companyId,
     });
 
@@ -38,8 +36,7 @@ exports.applyLeave = async (req, res) => {
 
     const employeeId = emp._id;
 
-    // REQUEST BODY
-    const { leaveType, fromDate, toDate, reason } = req.body;
+    const { leaveType, fromDate, toDate, reason, documentType } = req.body;
 
     if (!leaveType || !fromDate || !toDate || !reason) {
       return res.status(400).json({
@@ -59,6 +56,14 @@ exports.applyLeave = async (req, res) => {
 
     const balance = emp.leaveBalance?.[leaveType] || 0;
 
+    const documents =
+      req.files?.map((file) => ({
+        documentType: documentType || "other",
+        fileName: file.filename,
+        fileUrl: `/uploads/leaves/${file.filename}`,
+        mimeType: file.mimetype,
+      })) || [];
+
     if (balance < days) {
       const leave = await Leave.create({
         companyId: req.user.companyId,
@@ -68,6 +73,7 @@ exports.applyLeave = async (req, res) => {
         toDate,
         reason,
         days,
+        documents,
         balanceAvailable: false,
         status: "balance_rejected",
         managerApproval: {
@@ -95,6 +101,7 @@ exports.applyLeave = async (req, res) => {
       toDate,
       reason,
       days,
+      documents,
       balanceAvailable: true,
       status: "pending_manager",
       managerApproval: {
@@ -119,14 +126,12 @@ exports.applyLeave = async (req, res) => {
     });
   }
 };
+
 // ======================================================
 // MANAGER APPROVAL
 // ======================================================
 
-exports.managerApproval = async (
-  req,
-  res
-) => {
+exports.managerApproval = async (req, res) => {
   try {
     const leave = await Leave.findOne({
       _id: req.params.id,
@@ -140,29 +145,15 @@ exports.managerApproval = async (
       });
     }
 
-    const approved =
-      req.body.approved === true;
-
-    // ======================================================
-    // MANAGER APPROVAL DATA
-    // ======================================================
+    const approved = req.body.approved === true;
 
     leave.managerApproval = {
       approvedBy: req.user.employeeId,
-      status: approved
-        ? "approved"
-        : "rejected",
-      remarks:
-        req.body.remarks || "",
+      status: approved ? "approved" : "rejected",
+      remarks: req.body.remarks || "",
     };
 
-    // ======================================================
-    // UPDATE STATUS
-    // ======================================================
-
-    leave.status = approved
-      ? "pending_hr"
-      : "manager_rejected";
+    leave.status = approved ? "pending_hr" : "manager_rejected";
 
     await leave.save();
 
@@ -174,10 +165,7 @@ exports.managerApproval = async (
       leave,
     });
   } catch (error) {
-    console.log(
-      "MANAGER APPROVAL ERROR:",
-      error
-    );
+    console.log("MANAGER APPROVAL ERROR:", error);
 
     res.status(500).json({
       success: false,
@@ -190,15 +178,8 @@ exports.managerApproval = async (
 // HR APPROVAL
 // ======================================================
 
-exports.hrApproval = async (
-  req,
-  res
-) => {
+exports.hrApproval = async (req, res) => {
   try {
-    // ======================================================
-    // FIND LEAVE
-    // ======================================================
-
     const leave = await Leave.findOne({
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -211,88 +192,35 @@ exports.hrApproval = async (
       });
     }
 
-    // ======================================================
-    // APPROVAL STATUS
-    // ======================================================
-
-    const approved =
-      req.body.approved === true;
-
-    // ======================================================
-    // UPDATE HR APPROVAL
-    // ======================================================
+    const approved = req.body.approved === true;
 
     leave.hrApproval = {
       approvedBy: req.user.employeeId,
-
-      status: approved
-        ? "approved"
-        : "rejected",
-
-      remarks:
-        req.body.remarks || "",
+      status: approved ? "approved" : "rejected",
+      remarks: req.body.remarks || "",
     };
 
-    // ======================================================
-    // UPDATE LEAVE STATUS
-    // ======================================================
+    leave.status = approved ? "approved" : "rejected";
 
-    leave.status = approved
-      ? "approved"
-      : "rejected";
-
-    // ======================================================
-    // FIND EMPLOYEE
-    // ======================================================
-
-    const emp =
-      await Employee.findById(
-        leave.employeeId
-      );
+    const emp = await Employee.findById(leave.employeeId);
 
     if (!emp) {
       return res.status(404).json({
         success: false,
-        message:
-          "Employee not found",
+        message: "Employee not found",
       });
     }
 
-    // ======================================================
-    // IF LEAVE APPROVED
-    // ======================================================
-
     if (approved) {
-      // ==================================================
-      // CURRENT LEAVE BALANCE
-      // ==================================================
+      const currentBalance = emp.leaveBalance?.[leave.leaveType] || 0;
 
-      const currentBalance =
-        emp.leaveBalance?.[
-          leave.leaveType
-        ] || 0;
-
-      // ==================================================
-      // UPDATED BALANCE
-      // ==================================================
-
-      const updatedBalance =
-        Math.max(
-          0,
-          currentBalance -
-            leave.days
-        );
-
-      // ==================================================
-      // UPDATE LEAVE BALANCE
-      // ==================================================
+      const updatedBalance = Math.max(0, currentBalance - leave.days);
 
       await Employee.findByIdAndUpdate(
         leave.employeeId,
         {
           $set: {
-            [`leaveBalance.${leave.leaveType}`]:
-              updatedBalance,
+            [`leaveBalance.${leave.leaveType}`]: updatedBalance,
           },
         },
         {
@@ -301,49 +229,26 @@ exports.hrApproval = async (
         }
       );
 
-      // ==================================================
-      // UPDATE ATTENDANCE
-      // ==================================================
-
       for (
-        let d = new Date(
-          leave.fromDate
-        );
+        let d = new Date(leave.fromDate);
         d <= new Date(leave.toDate);
         d.setDate(d.getDate() + 1)
       ) {
         const day = new Date(d);
-
-        day.setHours(
-          0,
-          0,
-          0,
-          0
-        );
+        day.setHours(0, 0, 0, 0);
 
         await Attendance.findOneAndUpdate(
           {
-            companyId:
-              req.user.companyId,
-
-            employeeId:
-              leave.employeeId,
-
+            companyId: req.user.companyId,
+            employeeId: leave.employeeId,
             date: day,
           },
-
           {
-            companyId:
-              req.user.companyId,
-
-            employeeId:
-              leave.employeeId,
-
+            companyId: req.user.companyId,
+            employeeId: leave.employeeId,
             date: day,
-
             status: "leave",
           },
-
           {
             upsert: true,
             new: true,
@@ -352,70 +257,32 @@ exports.hrApproval = async (
       }
     }
 
-    // ======================================================
-    // SAVE LEAVE
-    // ======================================================
-
     await leave.save();
 
-    // ======================================================
-    // EMAIL TEMPLATE
-    // ======================================================
-
-    const html =
-      leaveApprovalTemplate(
-        emp.fullName,
-        leave.leaveType,
-        new Date(
-          leave.fromDate
-        ).toDateString(),
-        new Date(
-          leave.toDate
-        ).toDateString(),
-        approved
-          ? "Approved"
-          : "Rejected",
-        "HRMS"
-      );
-
-    // ======================================================
-    // SEND EMAIL
-    // ======================================================
+    const html = leaveApprovalTemplate(
+      emp.fullName,
+      leave.leaveType,
+      new Date(leave.fromDate).toDateString(),
+      new Date(leave.toDate).toDateString(),
+      approved ? "Approved" : "Rejected",
+      "HRMS"
+    );
 
     await sendEmail({
       to: emp.email,
-
-      subject: `Leave ${
-        approved
-          ? "Approved"
-          : "Rejected"
-      }`,
-
+      subject: `Leave ${approved ? "Approved" : "Rejected"}`,
       html,
     });
 
-    console.log(
-      "✅ Leave Email Sent"
-    );
-
-    // ======================================================
-    // RESPONSE
-    // ======================================================
-
     res.json({
       success: true,
-
       message: approved
         ? "Leave approved and attendance updated"
         : "Leave rejected by HR",
-
       leave,
     });
   } catch (error) {
-    console.log(
-      "HR APPROVAL ERROR:",
-      error
-    );
+    console.log("HR APPROVAL ERROR:", error);
 
     res.status(500).json({
       success: false,
@@ -423,8 +290,9 @@ exports.hrApproval = async (
     });
   }
 };
+
 // ======================================================
-// GET ALL LEAVES
+// GET LEAVES ROLE BASED
 // ======================================================
 
 exports.getLeaves = async (req, res) => {
@@ -453,7 +321,7 @@ exports.getLeaves = async (req, res) => {
       filter.employeeId = emp._id;
     }
 
-    if (req.user.role === "manager") {
+    if (req.user.role === "teamlead" || req.user.role === "projectmanager") {
       const manager = await Employee.findOne({
         userId: loggedInUserId,
         companyId: req.user.companyId,
@@ -469,8 +337,11 @@ exports.getLeaves = async (req, res) => {
       }
 
       const teamEmployees = await Employee.find({
-        reportingManager: manager._id,
         companyId: req.user.companyId,
+        $or: [
+          { reportingManager: manager._id },
+          { projectManager: manager._id },
+        ],
       }).select("_id");
 
       filter.employeeId = {
@@ -481,7 +352,7 @@ exports.getLeaves = async (req, res) => {
     const leaves = await Leave.find(filter)
       .populate(
         "employeeId",
-        "fullName employeeCode department designation"
+        "fullName employeeCode email departmentId designationId"
       )
       .sort({ createdAt: -1 });
 
@@ -500,6 +371,10 @@ exports.getLeaves = async (req, res) => {
     });
   }
 };
+
+// ======================================================
+// GET MY LEAVES
+// ======================================================
 
 exports.getMyLeaves = async (req, res) => {
   try {
@@ -523,7 +398,7 @@ exports.getMyLeaves = async (req, res) => {
     })
       .populate(
         "employeeId",
-        "fullName employeeCode department designation email"
+        "fullName employeeCode email departmentId designationId"
       )
       .sort({ createdAt: -1 });
 
