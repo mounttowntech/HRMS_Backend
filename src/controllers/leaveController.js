@@ -10,8 +10,19 @@ const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
 
 exports.applyLeave = async (req, res) => {
   try {
+    // ======================================================
+    // EMPLOYEE ID
+    // ======================================================
+
     const employeeId =
-      req.user.employeeId || req.body.employeeId;
+      req.user?.employeeId || req.body.employeeId;
+
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeId is required",
+      });
+    }
 
     // ======================================================
     // VALIDATE EMPLOYEE
@@ -30,7 +41,7 @@ exports.applyLeave = async (req, res) => {
     }
 
     // ======================================================
-    // REQUEST DATA
+    // REQUEST BODY
     // ======================================================
 
     const {
@@ -58,7 +69,19 @@ exports.applyLeave = async (req, res) => {
     }
 
     // ======================================================
-    // CALCULATE LEAVE DAYS
+    // DATE VALIDATION
+    // ======================================================
+
+    if (new Date(fromDate) > new Date(toDate)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "fromDate cannot be greater than toDate",
+      });
+    }
+
+    // ======================================================
+    // CALCULATE DAYS
     // ======================================================
 
     const days = calculateDays(
@@ -67,15 +90,11 @@ exports.applyLeave = async (req, res) => {
     );
 
     // ======================================================
-    // CHECK LEAVE BALANCE
+    // LEAVE BALANCE
     // ======================================================
 
     const balance =
       emp.leaveBalance?.[leaveType] || 0;
-
-    console.log("LEAVE TYPE:", leaveType);
-    console.log("AVAILABLE:", balance);
-    console.log("REQUESTED:", days);
 
     // ======================================================
     // INSUFFICIENT BALANCE
@@ -139,7 +158,7 @@ exports.applyLeave = async (req, res) => {
     res.status(201).json({
       success: true,
       message:
-        "Leave applied and sent for manager approval",
+        "Leave applied successfully",
       leave,
     });
   } catch (error) {
@@ -154,7 +173,6 @@ exports.applyLeave = async (req, res) => {
     });
   }
 };
-
 // ======================================================
 // MANAGER APPROVAL
 // ======================================================
