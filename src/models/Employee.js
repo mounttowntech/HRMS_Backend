@@ -120,7 +120,26 @@ const employeeSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true },
+  { timestamps: true }
+);
+
+// company-wise unique indexes
+employeeSchema.index(
+  { companyId: 1, email: 1 },
+  { unique: true }
+);
+
+employeeSchema.index(
+  { companyId: 1, employeeCode: 1 },
+  { unique: true }
+);
+
+employeeSchema.index(
+  { companyId: 1, biometricUserId: 1 },
+  {
+    unique: true,
+    sparse: true,
+  }
 );
 
 module.exports = mongoose.model("Employee", employeeSchema);

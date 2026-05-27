@@ -3,13 +3,12 @@ const User = require("../models/User");
 const Shift = require("../models/shiftModel");
 const sendMail = require("../utils/sendMail");
 
-const employeeCredentialsTemplate = require(
-  "../templates/employeeCredentialTemplate"
-);
+const employeeCredentialsTemplate = require("../templates/employeeCredentialTemplate");
 
 // ==============================
 // POPULATE EMPLOYEE
 // ==============================
+
 const populateEmployee = (query) => {
   return query
     .populate("departmentId", "name")
@@ -23,8 +22,35 @@ const populateEmployee = (query) => {
 };
 
 // ==============================
+// DUPLICATE ERROR HANDLER
+// ==============================
+
+const handleDuplicateError = (error, res) => {
+  const duplicateField = Object.keys(error.keyPattern || {}).find(
+    (key) => key !== "companyId"
+  );
+
+  let message = "Duplicate value found";
+
+  if (duplicateField === "email") {
+    message = "Employee email already exists";
+  } else if (duplicateField === "employeeCode") {
+    message = "Employee code already exists. Please try again";
+  } else if (duplicateField === "biometricUserId") {
+    message = "Biometric user ID already exists. Please try again";
+  }
+
+  return res.status(400).json({
+    success: false,
+    message,
+    field: duplicateField,
+  });
+};
+
+// ==============================
 // DUPLICATE-SAFE ID GENERATOR
 // ==============================
+
 const generateEmployeeIds = async (companyId) => {
   let nextNumber = 1;
   let employeeCode;
@@ -57,9 +83,7 @@ const generateEmployeeIds = async (companyId) => {
       $or: [{ employeeCode }, { biometricUserId }],
     });
 
-    if (exists) {
-      nextNumber++;
-    }
+    if (exists) nextNumber++;
   }
 
   return {
@@ -71,17 +95,17 @@ const generateEmployeeIds = async (companyId) => {
 // ==============================
 // CREATE EMPLOYEE
 // ==============================
+
 exports.createEmployee = async (req, res) => {
   try {
-    const { employeeCode, biometricUserId } = await generateEmployeeIds(
-      req.user.companyId
-    );
-
-    const password = req.body.password || "Welcome@123";
-
     const email = req.body.email?.trim().toLowerCase();
 
-    if (!email || !req.body.fullName || !req.body.departmentId || !req.body.designationId) {
+    if (
+      !email ||
+      !req.body.fullName ||
+      !req.body.departmentId ||
+      !req.body.designationId
+    ) {
       return res.status(400).json({
         success: false,
         message: "fullName, email, departmentId and designationId are required",
@@ -96,7 +120,8 @@ exports.createEmployee = async (req, res) => {
     if (existingEmployee) {
       return res.status(400).json({
         success: false,
-        message: "Employee already exists with this email",
+        message: "Employee email already exists",
+        field: "email",
       });
     }
 
@@ -113,6 +138,12 @@ exports.createEmployee = async (req, res) => {
         });
       }
     }
+
+    const { employeeCode, biometricUserId } = await generateEmployeeIds(
+      req.user.companyId
+    );
+
+    const password = req.body.password || "Welcome@123";
 
     const profileImage = req.file
       ? `/uploads/profile/${req.file.filename}`
@@ -143,7 +174,10 @@ exports.createEmployee = async (req, res) => {
       },
     });
 
-    let user = await User.findOne({ email: employee.email });
+    let user = await User.findOne({
+      email: employee.email,
+      companyId: employee.companyId,
+    });
 
     if (!user) {
       user = await User.create({
@@ -156,6 +190,13 @@ exports.createEmployee = async (req, res) => {
         role: employee.role,
         isActive: true,
       });
+    } else {
+      user.employeeId = employee._id;
+      user.name = employee.fullName;
+      user.phone = employee.phone;
+      user.role = employee.role;
+      user.isActive = true;
+      await user.save();
     }
 
     employee.userId = user._id;
@@ -187,11 +228,7 @@ exports.createEmployee = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Duplicate employeeCode, biometricUserId or email. Please try again.",
-      });
+      return handleDuplicateError(error, res);
     }
 
     res.status(500).json({
@@ -204,6 +241,7 @@ exports.createEmployee = async (req, res) => {
 // ==============================
 // GET ALL EMPLOYEES
 // ==============================
+
 exports.getEmployees = async (req, res) => {
   try {
     const employees = await populateEmployee(
@@ -228,6 +266,7 @@ exports.getEmployees = async (req, res) => {
 // ==============================
 // GET EMPLOYEE BY ID
 // ==============================
+
 exports.getEmployeeById = async (req, res) => {
   try {
     const employee = await populateEmployee(
@@ -259,6 +298,7 @@ exports.getEmployeeById = async (req, res) => {
 // ==============================
 // UPDATE EMPLOYEE
 // ==============================
+
 exports.updateEmployee = async (req, res) => {
   try {
     if (req.body.shiftId) {
@@ -281,9 +321,25 @@ exports.updateEmployee = async (req, res) => {
 
     delete updateData.employeeCode;
     delete updateData.biometricUserId;
+    delete updateData.userId;
+    delete updateData.companyId;
 
     if (updateData.email) {
       updateData.email = updateData.email.trim().toLowerCase();
+
+      const existingEmployee = await Employee.findOne({
+        email: updateData.email,
+        companyId: req.user.companyId,
+        _id: { $ne: req.params.id },
+      });
+
+      if (existingEmployee) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee email already exists",
+          field: "email",
+        });
+      }
     }
 
     if (req.file) {
@@ -312,13 +368,17 @@ exports.updateEmployee = async (req, res) => {
     }
 
     await User.findOneAndUpdate(
-      { employeeId: employee._id },
+      {
+        employeeId: employee._id,
+        companyId: req.user.companyId,
+      },
       {
         name: employee.fullName,
         email: employee.email,
         phone: employee.phone,
         role: employee.role,
-      }
+      },
+      { new: true }
     );
 
     res.status(200).json({
@@ -328,10 +388,7 @@ exports.updateEmployee = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate email or unique field found",
-      });
+      return handleDuplicateError(error, res);
     }
 
     res.status(500).json({
@@ -344,6 +401,7 @@ exports.updateEmployee = async (req, res) => {
 // ==============================
 // DELETE EMPLOYEE
 // ==============================
+
 exports.deleteEmployee = async (req, res) => {
   try {
     const employee = await Employee.findOneAndDelete({
@@ -360,6 +418,7 @@ exports.deleteEmployee = async (req, res) => {
 
     await User.findOneAndDelete({
       employeeId: employee._id,
+      companyId: req.user.companyId,
     });
 
     res.status(200).json({
