@@ -17,7 +17,7 @@ router.patch(
 router.get(
   "/all",
   verifyToken,
-  allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.getLeaves,
 );
 module.exports = router;
