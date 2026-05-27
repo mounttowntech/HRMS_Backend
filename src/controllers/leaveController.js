@@ -427,38 +427,72 @@ exports.hrApproval = async (
 // GET ALL LEAVES
 // ======================================================
 
-exports.getLeaves = async (
-  req,
-  res
-) => {
+exports.getLeaves = async (req, res) => {
   try {
-    const leaves = await Leave.find({
-      companyId:
-        req.user.companyId,
-    })
+    const loggedInUserId = req.user?.userId || req.user?.id;
+
+    let filter = {
+      companyId: req.user.companyId,
+    };
+
+    if (req.user.role === "employee") {
+      const emp = await Employee.findOne({
+        userId: loggedInUserId,
+        companyId: req.user.companyId,
+      });
+
+      if (!emp) {
+        return res.status(404).json({
+          success: false,
+          message: "Employee not found",
+          userId: loggedInUserId,
+          companyId: req.user.companyId,
+        });
+      }
+
+      filter.employeeId = emp._id;
+    }
+
+    if (req.user.role === "manager") {
+      const manager = await Employee.findOne({
+        userId: loggedInUserId,
+        companyId: req.user.companyId,
+      });
+
+      if (!manager) {
+        return res.status(404).json({
+          success: false,
+          message: "Manager not found",
+          userId: loggedInUserId,
+          companyId: req.user.companyId,
+        });
+      }
+
+      const teamEmployees = await Employee.find({
+        reportingManager: manager._id,
+        companyId: req.user.companyId,
+      }).select("_id");
+
+      filter.employeeId = {
+        $in: teamEmployees.map((e) => e._id),
+      };
+    }
+
+    const leaves = await Leave.find(filter)
       .populate(
         "employeeId",
-        `
-        fullName
-        employeeCode
-        department
-        designation
-      `
+        "fullName employeeCode department designation"
       )
-      .sort({
-        createdAt: -1,
-      });
+      .sort({ createdAt: -1 });
 
     res.json({
       success: true,
+      role: req.user.role,
       count: leaves.length,
       leaves,
     });
   } catch (error) {
-    console.log(
-      "GET LEAVES ERROR:",
-      error
-    );
+    console.log("GET LEAVES ERROR:", error);
 
     res.status(500).json({
       success: false,
