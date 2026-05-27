@@ -8,97 +8,56 @@ const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
 // APPLY LEAVE
 // ======================================================
 
+
 exports.applyLeave = async (req, res) => {
   try {
-    // ======================================================
-    // EMPLOYEE ID
-    // ======================================================
+    // USER ID FROM TOKEN
+    const userId = req.user?.userId || req.user?.id;
 
-    const employeeId =
-      req.user?.employeeId || req.body.employeeId;
-
-    if (!employeeId) {
-      return res.status(400).json({
+    if (!userId) {
+      return res.status(401).json({
         success: false,
-        message: "employeeId is required",
+        message: "Invalid token. userId not found",
       });
     }
 
-    // ======================================================
-    // VALIDATE EMPLOYEE
-    // ======================================================
-
+    // FIND EMPLOYEE USING LOGGED-IN USER ID
     const emp = await Employee.findOne({
-      _id: employeeId,
+      userId: userId,
       companyId: req.user.companyId,
     });
 
     if (!emp) {
       return res.status(404).json({
         success: false,
-        message: "Employee not found",
+        message: "Employee not found for this logged-in user",
+        userId,
+        companyId: req.user.companyId,
       });
     }
 
-    // ======================================================
+    const employeeId = emp._id;
+
     // REQUEST BODY
-    // ======================================================
+    const { leaveType, fromDate, toDate, reason } = req.body;
 
-    const {
-      leaveType,
-      fromDate,
-      toDate,
-      reason,
-    } = req.body;
-
-    // ======================================================
-    // VALIDATION
-    // ======================================================
-
-    if (
-      !leaveType ||
-      !fromDate ||
-      !toDate ||
-      !reason
-    ) {
+    if (!leaveType || !fromDate || !toDate || !reason) {
       return res.status(400).json({
         success: false,
-        message:
-          "leaveType, fromDate, toDate and reason are required",
+        message: "leaveType, fromDate, toDate and reason are required",
       });
     }
-
-    // ======================================================
-    // DATE VALIDATION
-    // ======================================================
 
     if (new Date(fromDate) > new Date(toDate)) {
       return res.status(400).json({
         success: false,
-        message:
-          "fromDate cannot be greater than toDate",
+        message: "fromDate cannot be greater than toDate",
       });
     }
 
-    // ======================================================
-    // CALCULATE DAYS
-    // ======================================================
+    const days = calculateDays(fromDate, toDate);
 
-    const days = calculateDays(
-      fromDate,
-      toDate
-    );
-
-    // ======================================================
-    // LEAVE BALANCE
-    // ======================================================
-
-    const balance =
-      emp.leaveBalance?.[leaveType] || 0;
-
-    // ======================================================
-    // INSUFFICIENT BALANCE
-    // ======================================================
+    const balance = emp.leaveBalance?.[leaveType] || 0;
 
     if (balance < days) {
       const leave = await Leave.create({
@@ -111,11 +70,9 @@ exports.applyLeave = async (req, res) => {
         days,
         balanceAvailable: false,
         status: "balance_rejected",
-
         managerApproval: {
           status: "pending",
         },
-
         hrApproval: {
           status: "pending",
         },
@@ -123,17 +80,12 @@ exports.applyLeave = async (req, res) => {
 
       return res.status(200).json({
         success: false,
-        message:
-          "Insufficient leave balance",
+        message: "Insufficient leave balance",
         availableBalance: balance,
         requestedDays: days,
         leave,
       });
     }
-
-    // ======================================================
-    // CREATE LEAVE
-    // ======================================================
 
     const leave = await Leave.create({
       companyId: req.user.companyId,
@@ -145,11 +97,9 @@ exports.applyLeave = async (req, res) => {
       days,
       balanceAvailable: true,
       status: "pending_manager",
-
       managerApproval: {
         status: "pending",
       },
-
       hrApproval: {
         status: "pending",
       },
@@ -157,15 +107,11 @@ exports.applyLeave = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message:
-        "Leave applied successfully",
+      message: "Leave applied successfully",
       leave,
     });
   } catch (error) {
-    console.log(
-      "APPLY LEAVE ERROR:",
-      error
-    );
+    console.log("APPLY LEAVE ERROR:", error);
 
     res.status(500).json({
       success: false,
