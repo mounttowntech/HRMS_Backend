@@ -298,12 +298,14 @@ exports.hrApproval = async (req, res) => {
 exports.getLeaves = async (req, res) => {
   try {
     const loggedInUserId = req.user?.userId || req.user?.id;
+    const role = req.user.role;
 
     let filter = {
       companyId: req.user.companyId,
     };
 
-    if (req.user.role === "employee") {
+    // Employee - own leaves only
+    if (role === "employee") {
       const emp = await Employee.findOne({
         userId: loggedInUserId,
         companyId: req.user.companyId,
@@ -313,15 +315,38 @@ exports.getLeaves = async (req, res) => {
         return res.status(404).json({
           success: false,
           message: "Employee not found",
-          userId: loggedInUserId,
-          companyId: req.user.companyId,
         });
       }
 
       filter.employeeId = emp._id;
     }
 
-    if (req.user.role === "teamlead" || req.user.role === "projectmanager") {
+    // Team Lead - only reporting members leaves
+    if (role === "teamlead") {
+      const teamLead = await Employee.findOne({
+        userId: loggedInUserId,
+        companyId: req.user.companyId,
+      });
+
+      if (!teamLead) {
+        return res.status(404).json({
+          success: false,
+          message: "Team lead not found",
+        });
+      }
+
+      const teamEmployees = await Employee.find({
+        companyId: req.user.companyId,
+        reportingManager: teamLead._id,
+      }).select("_id");
+
+      filter.employeeId = {
+        $in: teamEmployees.map((emp) => emp._id),
+      };
+    }
+
+    // Project Manager / Manager - only project members leaves
+    if (role === "projectmanager" || role === "manager") {
       const manager = await Employee.findOne({
         userId: loggedInUserId,
         companyId: req.user.companyId,
@@ -331,23 +356,21 @@ exports.getLeaves = async (req, res) => {
         return res.status(404).json({
           success: false,
           message: "Manager not found",
-          userId: loggedInUserId,
-          companyId: req.user.companyId,
         });
       }
 
       const teamEmployees = await Employee.find({
         companyId: req.user.companyId,
-        $or: [
-          { reportingManager: manager._id },
-          { projectManager: manager._id },
-        ],
+        projectManager: manager._id,
       }).select("_id");
 
       filter.employeeId = {
-        $in: teamEmployees.map((e) => e._id),
+        $in: teamEmployees.map((emp) => emp._id),
       };
     }
+
+    // Admin / HR - no extra filter
+    // They can see all company employees leaves
 
     const leaves = await Leave.find(filter)
       .populate(
@@ -356,9 +379,9 @@ exports.getLeaves = async (req, res) => {
       )
       .sort({ createdAt: -1 });
 
-    res.json({
+    res.status(200).json({
       success: true,
-      role: req.user.role,
+      role,
       count: leaves.length,
       leaves,
     });
