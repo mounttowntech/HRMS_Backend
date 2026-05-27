@@ -20,4 +20,8 @@ router.get(
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.getLeaves,
 );
+
+router.get("/my-leaves", 
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"), c.getMyLeaves);
 module.exports = router;

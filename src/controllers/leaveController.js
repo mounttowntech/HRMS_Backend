@@ -466,3 +466,44 @@ exports.getLeaves = async (
     });
   }
 };
+
+exports.getMyLeaves = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+
+    const emp = await Employee.findOne({
+      userId,
+      companyId: req.user.companyId,
+    });
+
+    if (!emp) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found for this logged-in user",
+      });
+    }
+
+    const leaves = await Leave.find({
+      companyId: req.user.companyId,
+      employeeId: emp._id,
+    })
+      .populate(
+        "employeeId",
+        "fullName employeeCode department designation email"
+      )
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: leaves.length,
+      leaves,
+    });
+  } catch (error) {
+    console.log("GET MY LEAVES ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
