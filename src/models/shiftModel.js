@@ -16,7 +16,7 @@ const shiftSchema = new mongoose.Schema(
 
     shiftType: {
       type: String,
-      enum: ["general", "morning", "evening", "night", "rotational"],
+      enum: ["general", "afternoon", "evening", "night", "rotational"],
       default: "general",
     },
 
