@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Company = require("../models/Company");
 const sendMail = require("../utils/sendMail");
-
+const Employee = require("../models/Employee");
 const passwordChangedTemplate = require(
   "../templates/passwordChangeTemplate"
 );
@@ -122,6 +122,15 @@ exports.login = async (req, res) => {
     user.lastLoginAt = new Date();
     await user.save();
 
+    let employee = null;
+
+    if (user.employeeId) {
+      employee = await Employee.findOne({
+        _id: user.employeeId,
+        companyId: user.companyId,
+      }).select("employeeCode fullName");
+    }
+
     const redirectMap = {
       employer: "/employer/dashboard",
       admin: "/admin/dashboard",
@@ -139,7 +148,9 @@ exports.login = async (req, res) => {
         id: user._id,
         companyId: user.companyId,
         employeeId: user.employeeId,
+        employeeCode: employee?.employeeCode || null,
         name: user.name,
+        employeeName: employee?.fullName || null,
         email: user.email,
         role: user.role,
       },

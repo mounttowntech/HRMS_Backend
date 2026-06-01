@@ -148,44 +148,37 @@ const verifyEmployeePassword = async (
 
 exports.employeePunchIn = async (req, res) => {
   try {
-    const { employeeCode, password } = req.body;
+    const { employeeCode } = req.body;
 
-    if (!employeeCode || !password) {
+    if (!employeeCode) {
       return res.status(400).json({
         success: false,
-        message:
-          "employeeCode and password are mandatory",
+        message: "employeeCode is mandatory",
       });
     }
 
-    const employee = await verifyEmployeePassword(
-      req.user.companyId,
+    // Find employee by employeeCode
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
       employeeCode,
-      password
-    );
+      status: "active",
+    });
 
     if (!employee) {
-      return res.status(401).json({
+      return res.status(404).json({
         success: false,
-        message:
-          "Invalid employee code or password",
+        message: "Employee not found",
       });
     }
 
-    // ==========================================
-    // CHECK EXISTING ATTENDANCE
-    // ==========================================
-
+    // Check today's attendance
     let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
       date: today(),
     });
 
-    // ==========================================
-    // ALREADY PUNCHED IN
-    // ==========================================
-
+    // Already punched in
     if (attendance && attendance.punchIn) {
       return res.status(400).json({
         success: false,
@@ -193,10 +186,7 @@ exports.employeePunchIn = async (req, res) => {
       });
     }
 
-    // ==========================================
-    // CREATE NEW ATTENDANCE
-    // ==========================================
-
+    // Create attendance if not exists
     if (!attendance) {
       attendance = new Attendance({
         companyId: req.user.companyId,
@@ -211,9 +201,9 @@ exports.employeePunchIn = async (req, res) => {
 
     await attendance.save();
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Punch in saved",
+      message: "Punch in saved successfully",
       attendance,
     });
   } catch (error) {
@@ -232,30 +222,30 @@ exports.employeePunchIn = async (req, res) => {
 
 exports.employeePunchOut = async (req, res) => {
   try {
-    const { employeeCode, password } = req.body;
+    const { employeeCode } = req.body;
 
-    if (!employeeCode || !password) {
+    if (!employeeCode) {
       return res.status(400).json({
         success: false,
-        message:
-          "employeeCode and password are mandatory",
+        message: "employeeCode is mandatory",
       });
     }
 
-    const employee = await verifyEmployeePassword(
-      req.user.companyId,
+    // Find Employee
+    const employee = await Employee.findOne({
+      companyId: req.user.companyId,
       employeeCode,
-      password
-    );
+      status: "active",
+    });
 
     if (!employee) {
-      return res.status(401).json({
+      return res.status(404).json({
         success: false,
-        message:
-          "Invalid employee code or password",
+        message: "Employee not found",
       });
     }
 
+    // Find Today's Attendance
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
@@ -272,10 +262,11 @@ exports.employeePunchOut = async (req, res) => {
     if (attendance.punchOut) {
       return res.status(400).json({
         success: false,
-        message: "Already punched out",
+        message: "Already punched out today",
       });
     }
 
+    // Save Punch Out
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
 
@@ -283,9 +274,9 @@ exports.employeePunchOut = async (req, res) => {
 
     await attendance.save();
 
-    res.json({
+    res.status(200).json({
       success: true,
-      message: "Punch out saved",
+      message: "Punch out saved successfully",
       attendance,
     });
   } catch (error) {
@@ -297,7 +288,6 @@ exports.employeePunchOut = async (req, res) => {
     });
   }
 };
-
 // ======================================================
 // START BREAK
 // ======================================================
