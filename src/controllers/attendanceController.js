@@ -1,6 +1,7 @@
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
 const User = require("../models/User");
+const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
 
 // ======================================================
@@ -13,6 +14,16 @@ const today = () => {
   return d;
 };
 
+// ======================================================
+// DATE KEY HELPER - INDIA LOCAL DATE FORMAT
+// ======================================================
+const getDateKey = (date) => {
+  const d = new Date(date);
+
+  return d.toLocaleDateString("en-CA", {
+    timeZone: "Asia/Kolkata",
+  });
+};
 const minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
 };
@@ -881,4 +892,348 @@ exports.getAttendance = async (req, res) => {
       message: error.message,
     });
   }
+};
+
+
+
+
+
+
+
+
+
+// ATTENDANCE CALENDAR VIEW
+
+
+
+
+
+exports.getAttendanceCalendarView = async (req, res) => {
+
+  try {
+
+    const loggedInUserId = req.user?.userId || req.user?.id;
+
+    const role = req.user.role;
+
+
+
+    let employeeId = req.query.employeeId;
+
+
+
+    if (role === "employee") {
+
+      const emp = await Employee.findOne({
+
+        userId: loggedInUserId,
+
+        companyId: req.user.companyId,
+
+      });
+
+
+
+      if (!emp) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          message: "Employee not found",
+
+        });
+
+      }
+
+
+
+      employeeId = emp._id;
+
+    }
+
+
+
+    if (!employeeId) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "employeeId is required",
+
+      });
+
+    }
+
+
+
+    const month = Number(req.query.month);
+
+    const year = Number(req.query.year);
+
+
+
+    if (!month || !year) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "month and year are required",
+
+      });
+
+    }
+
+
+
+    const startDate = new Date(year, month - 1, 1);
+
+    startDate.setHours(0, 0, 0, 0);
+
+
+
+    const endDate = new Date(year, month, 0);
+
+    endDate.setHours(23, 59, 59, 999);
+
+
+
+    const todayDate = new Date();
+
+    todayDate.setHours(0, 0, 0, 0);
+
+
+
+    const attendanceRecords = await Attendance.find({
+
+      companyId: req.user.companyId,
+
+      employeeId,
+
+      date: {
+
+        $gte: startDate,
+
+        $lte: endDate,
+
+      },
+
+    });
+
+
+
+    const leaveRecords = await Leave.find({
+
+      companyId: req.user.companyId,
+
+      employeeId,
+
+      fromDate: { $lte: endDate },
+
+      toDate: { $gte: startDate },
+
+      status: {
+
+        $in: ["pending_manager", "pending_hr", "approved"],
+
+      },
+
+    });
+
+
+
+    const attendanceMap = {};
+
+
+
+    attendanceRecords.forEach((attendance) => {
+
+      const key = getDateKey(attendance.date);
+
+      attendanceMap[key] = attendance;
+
+    });
+
+
+
+    const leaveMap = {};
+
+
+
+    leaveRecords.forEach((leave) => {
+
+      let current = new Date(leave.fromDate);
+
+      current.setHours(0, 0, 0, 0);
+
+
+
+      const leaveEnd = new Date(leave.toDate);
+
+      leaveEnd.setHours(0, 0, 0, 0);
+
+
+
+      while (current <= leaveEnd) {
+
+        const key = getDateKey(current);
+
+
+
+        leaveMap[key] = {
+
+          leaveId: leave._id,
+
+          leaveType: leave.leaveType,
+
+          leaveStatus: leave.status,
+
+          reason: leave.reason,
+
+        };
+
+
+
+        current.setDate(current.getDate() + 1);
+
+      }
+
+    });
+
+
+
+    const calendar = [];
+
+
+
+    let currentDate = new Date(startDate);
+
+
+
+    while (currentDate <= endDate) {
+
+      const dateKey = getDateKey(currentDate);
+
+
+
+      const attendance = attendanceMap[dateKey];
+
+      const leave = leaveMap[dateKey];
+
+
+
+      let status = "upcoming";
+
+
+
+      if (attendance) {
+
+        status = attendance.status;
+
+      } else if (leave && leave.leaveStatus === "approved") {
+
+        status = "leave";
+
+      } else if (
+
+        leave &&
+
+        ["pending_manager", "pending_hr"].includes(leave.leaveStatus)
+
+      ) {
+
+        status = "applied_leave";
+
+      } else if (currentDate < todayDate) {
+
+        status = "absent";
+
+      } else {
+
+        status = "upcoming";
+
+      }
+
+
+
+      calendar.push({
+
+        date: dateKey,
+
+        day: currentDate.toLocaleDateString("en-US", {
+
+          weekday: "long",
+
+          timeZone: "Asia/Kolkata",
+
+        }),
+
+        status,
+
+        attendance: attendance
+
+          ? {
+
+              punchIn: attendance.punchIn,
+
+              punchOut: attendance.punchOut,
+
+              punchInSource: attendance.punchInSource,
+
+              punchOutSource: attendance.punchOutSource,
+
+              workingMinutes: attendance.workingMinutes,
+
+              totalBreakMinutes: attendance.totalBreakMinutes,
+
+              status: attendance.status,
+
+            }
+
+          : null,
+
+        leave: leave || null,
+
+      });
+
+
+
+      currentDate.setDate(currentDate.getDate() + 1);
+
+    }
+
+
+
+    res.status(200).json({
+
+      success: true,
+
+      employeeId,
+
+      month,
+
+      year,
+
+      calendar,
+
+    });
+
+  } catch (error) {
+
+    console.log("ATTENDANCE CALENDAR ERROR:", error);
+
+
+
+    res.status(500).json({
+
+      success: false,
+
+      message: error.message,
+
+    });
+
+  }
+
 };

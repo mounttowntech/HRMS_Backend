@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const attendanceController = require("../controllers/attendanceController");
-const { verifyToken } = require("../middleware/authMiddleware");
+const { verifyToken ,allowRoles } = require("../middleware/authMiddleware");
 
 router.post(
   "/employee/punch-in",
@@ -54,4 +54,11 @@ router.post(
 
 router.get("/all", verifyToken, attendanceController.getAttendance);
 
+
+router.get(
+  "/calendar-view",
+  verifyToken,
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  attendanceController.getAttendanceCalendarView
+);
 module.exports = router;
