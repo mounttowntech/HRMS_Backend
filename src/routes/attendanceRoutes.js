@@ -61,4 +61,12 @@ router.get(
   allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
   attendanceController.getAttendanceCalendarView
 );
+
+
+router.get(
+  "/user-daily/:employeeId",
+  verifyToken,
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  attendanceController.getAttendanceByUserId
+);
 module.exports = router;

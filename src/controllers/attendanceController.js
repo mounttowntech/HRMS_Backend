@@ -894,19 +894,7 @@ exports.getAttendance = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-
 // ATTENDANCE CALENDAR VIEW
-
-
-
-
 
 exports.getAttendanceCalendarView = async (req, res) => {
 
@@ -1223,6 +1211,114 @@ exports.getAttendanceCalendarView = async (req, res) => {
   } catch (error) {
 
     console.log("ATTENDANCE CALENDAR ERROR:", error);
+
+
+
+    res.status(500).json({
+
+      success: false,
+
+      message: error.message,
+
+    });
+
+  }
+
+};
+
+
+// GET SINGLE USER ATTENDANCE - DAILY BASIS
+exports.getAttendanceByUserId = async (req, res) => {
+
+  try {
+
+    const { employeeId } = req.params;
+
+
+
+    if (!employeeId) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "employeeId is required",
+
+      });
+
+    }
+
+
+
+    const start = new Date();
+
+    start.setHours(0, 0, 0, 0);
+
+
+
+    const end = new Date();
+
+    end.setHours(23, 59, 59, 999);
+
+
+
+    const attendance = await Attendance.findOne({
+
+      companyId: req.user.companyId,
+
+      employeeId,
+
+      date: {
+
+        $gte: start,
+
+        $lte: end,
+
+      },
+
+    }).populate(
+
+      "employeeId",
+
+      "fullName employeeCode email departmentId designationId"
+
+    );
+
+
+
+    if (!attendance) {
+
+      return res.status(200).json({
+
+        success: true,
+
+        message: "Employee is absent today",
+
+        status: "absent",
+
+        attendance: null,
+
+      });
+
+    }
+
+
+
+    res.status(200).json({
+
+      success: true,
+
+      message: "Today attendance found",
+
+      status: attendance.status,
+
+      attendance,
+
+    });
+
+  } catch (error) {
+
+    console.log("GET TODAY ATTENDANCE ERROR:", error);
 
 
 
