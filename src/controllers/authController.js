@@ -3,9 +3,7 @@ const User = require("../models/User");
 const Company = require("../models/Company");
 const sendMail = require("../utils/sendMail");
 const Employee = require("../models/Employee");
-const passwordChangedTemplate = require(
-  "../templates/passwordChangeTemplate"
-);
+const passwordChangedTemplate = require("../templates/passwordChangeTemplate");
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -19,7 +17,7 @@ const generateToken = (user) => {
     process.env.JWT_SECRET,
     {
       expiresIn: "7d",
-    }
+    },
   );
 };
 
@@ -82,14 +80,17 @@ exports.registerEmployer = async (req, res) => {
 };
 
 // LOGIN
+
 exports.login = async (req, res) => {
   try {
     const email = req.body.email?.trim().toLowerCase();
+
     const password = req.body.password?.trim();
 
     if (!email || !password) {
       return res.status(400).json({
         success: false,
+
         message: "Email and password are required",
       });
     }
@@ -99,6 +100,7 @@ exports.login = async (req, res) => {
     if (!user) {
       return res.status(401).json({
         success: false,
+
         message: "User not found",
       });
     }
@@ -108,6 +110,7 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
+
         message: "Wrong password",
       });
     }
@@ -115,50 +118,78 @@ exports.login = async (req, res) => {
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
+
         message: "Account disabled",
       });
     }
 
     user.lastLoginAt = new Date();
+
     await user.save();
 
-    let employee = null;
+    const employee = await Employee.findOne({
+      companyId: user.companyId,
 
-    if (user.employeeId) {
-      employee = await Employee.findOne({
-        _id: user.employeeId,
-        companyId: user.companyId,
-      }).select("employeeCode fullName");
-    }
+      $or: [
+        { _id: user.employeeId || null },
+
+        { userId: user._id },
+
+        { email: user.email },
+      ],
+    }).select("employeeCode fullName role departmentId designationId");
 
     const redirectMap = {
       employer: "/employer/dashboard",
+
       admin: "/admin/dashboard",
+
       hr: "/hr/dashboard",
+
       employee: "/employee/dashboard",
+
       teamlead: "/teamlead/dashboard",
+
       projectmanager: "/project-manager/dashboard",
     };
 
     res.status(200).json({
       success: true,
+
       message: "Login success",
+
       token: generateToken(user),
+
       user: {
         id: user._id,
+
         companyId: user.companyId,
-        employeeId: user.employeeId,
+
+        employeeId: user.employeeId || employee?._id || null,
+
         employeeCode: employee?.employeeCode || null,
+
         name: user.name,
+
         employeeName: employee?.fullName || null,
+
         email: user.email,
+
         role: user.role,
+
+        employeeRole: employee?.role || null,
+
+        departmentId: employee?.departmentId || null,
+
+        designationId: employee?.designationId || null,
       },
+
       redirectTo: redirectMap[user.role] || "/dashboard",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
+
       message: error.message,
     });
   }

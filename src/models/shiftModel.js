@@ -6,6 +6,7 @@ const shiftSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
       required: true,
+      index: true,
     },
 
     shiftName: {
@@ -16,7 +17,13 @@ const shiftSchema = new mongoose.Schema(
 
     shiftType: {
       type: String,
-      enum: ["general", "afternoon", "evening", "night", "rotational"],
+      enum: [
+        "general",
+        "afternoon",
+        "evening",
+        "night",
+        "rotational",
+      ],
       default: "general",
     },
 
@@ -35,6 +42,7 @@ const shiftSchema = new mongoose.Schema(
     graceMinutes: {
       type: Number,
       default: 10,
+      min: 0,
     },
 
     weekOff: {
@@ -48,7 +56,20 @@ const shiftSchema = new mongoose.Schema(
       default: "active",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
+);
+
+// Prevent duplicate shift names inside same company
+shiftSchema.index(
+  {
+    companyId: 1,
+    shiftName: 1,
+  },
+  {
+    unique: true,
+  }
 );
 
 module.exports = mongoose.model("Shift", shiftSchema);

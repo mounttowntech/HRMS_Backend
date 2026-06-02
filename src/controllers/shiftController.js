@@ -1,24 +1,81 @@
 const mongoose = require("mongoose");
 const Shift = require("../models/shiftModel");
+
 exports.createShift = async (req, res) => {
   try {
+    const {
+      shiftName,
+
+      shiftType,
+
+      startTime,
+
+      endTime,
+
+      graceMinutes,
+
+      weekOff,
+
+      status,
+    } = req.body;
+
+    if (!req.user?.companyId) {
+      return res.status(401).json({
+        success: false,
+
+        message: "companyId not found in token",
+      });
+    }
+
+    if (!shiftName || !startTime || !endTime) {
+      return res.status(400).json({
+        success: false,
+
+        message: "shiftName, startTime and endTime are required",
+      });
+    }
+
+    const existingShift = await Shift.findOne({
+      companyId: req.user.companyId,
+
+      shiftName: shiftName.trim(),
+    });
+
+    if (existingShift) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Shift name already exists for this company",
+      });
+    }
+
     const shift = await Shift.create({
       companyId: req.user.companyId,
-      shiftName: req.body.shiftName,
-      shiftType: req.body.shiftType,
-      startTime: req.body.startTime,
-      endTime: req.body.endTime,
-      graceMinutes: req.body.graceMinutes,
-      weekOff: req.body.weekOff,
-      status: req.body.status || "active",
+
+      shiftName: shiftName.trim(),
+
+      shiftType: shiftType || "general",
+
+      startTime,
+
+      endTime,
+
+      graceMinutes: graceMinutes || 10,
+
+      weekOff: weekOff || ["Sunday"],
+
+      status: status || "active",
     });
 
     res.status(201).json({
       success: true,
+
       message: "Shift created successfully",
+
       shift,
     });
   } catch (error) {
+    console.log("CREATE SHIFT ERROR:", error);
     res.status(500).json({
       success: false,
       message: error.message,
