@@ -32,7 +32,7 @@ router.put("/", verifyToken, allowRoles("admin"), updateRole);
 router.put(
   "/:id",
   verifyToken,
-  allowRoles("admin"),
+  allowRoles("admin","teamlead"),
   updateRole
 );
 
