@@ -16,5 +16,5 @@ router.patch(
   allowRoles("teamlead", "projectmanager", "admin"),
   c.reviewTask,
 );
-router.get("/", verifyToken, c.getTasks);
+router.get("/all", verifyToken, c.getTasks);
 module.exports = router;
