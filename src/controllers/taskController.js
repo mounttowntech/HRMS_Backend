@@ -140,118 +140,237 @@ exports.getTaskById = async (req, res) => {
 };
 
 // Update Task
+ 
+
+
+
 exports.updateTask = async (req, res) => {
+
   try {
+
     const {
+
       title,
+
       description,
+
       assignedTo,
+
       priority,
+
       status,
+
       dueDate,
+
       updateText,
+
       submitReview,
+
       approved,
+
       remarks,
+
     } = req.body;
 
+
+
     if (priority && !allowedPriority.includes(priority)) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Invalid priority value",
+
       });
+
     }
+
+
 
     if (status && !allowedStatus.includes(status)) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Invalid status value",
+
       });
+
     }
 
-    if (status !== undefined) {
-      task.status = status;
-    }
+
+
     let loggedEmployeeId = req.user.employeeId || null;
 
+
+
     if (!loggedEmployeeId) {
+
       const employee = await Employee.findOne({
+
         userId: req.user.id,
+
         companyId: req.user.companyId,
+
       });
+
+
 
       if (employee) {
+
         loggedEmployeeId = employee._id;
+
       }
+
     }
+
+
 
     const task = await Task.findOne({
+
       _id: req.params.id,
+
       companyId: req.user.companyId,
+
     });
 
+
+
     if (!task) {
+
       return res.status(404).json({
+
         success: false,
+
         message: "Task not found",
+
       });
+
     }
+
+
 
     if (title !== undefined) task.title = title;
+
     if (description !== undefined) task.description = description;
+
     if (assignedTo !== undefined) task.assignedTo = assignedTo;
+
     if (priority !== undefined) task.priority = priority;
+
     if (dueDate !== undefined) task.dueDate = dueDate || null;
 
+
+
     if (status !== undefined) {
+
       task.status = status;
+
     }
+
+
 
     if (updateText !== undefined && updateText.trim() !== "") {
+
       task.dailyUpdates.push({
+
         updateText,
+
         addedBy: loggedEmployeeId,
+
       });
 
+
+
       task.status = "in_progress";
+
     }
+
+
 
     if (submitReview === true) {
-      task.status = "under_review";
-      task.review.status = "pending";
-    }
 
-    if (approved !== undefined) {
+      task.status = "under_review";
+
+
+
       task.review = {
-        reviewedBy: loggedEmployeeId,
-        status: approved === true ? "approved" : "rework",
-        remarks: remarks || "",
+
+        reviewedBy: null,
+
+        status: "pending",
+
+        remarks: "",
+
       };
 
-      task.status = approved === true ? "closed" : "rework";
     }
+
+
+
+    if (approved !== undefined) {
+
+      task.review = {
+
+        reviewedBy: loggedEmployeeId,
+
+        status: approved === true ? "approved" : "rework",
+
+        remarks: remarks || "",
+
+      };
+
+
+
+      task.status = approved === true ? "closed" : "rework";
+
+    }
+
+
 
     await task.save();
 
+
+
     const updatedTask = await Task.findById(task._id)
+
       .populate("projectId", "projectName")
+
       .populate("assignedTo", "fullName role designation")
+
       .populate("assignedBy", "fullName role designation")
+
       .populate("dailyUpdates.addedBy", "fullName role designation")
+
       .populate("review.reviewedBy", "fullName role designation");
 
+
+
     res.status(200).json({
+
       success: true,
+
       message: "Task updated successfully",
+
       task: updatedTask,
+
     });
+
   } catch (error) {
+
     res.status(500).json({
+
       success: false,
+
       message: error.message,
+
     });
+
   }
-};
+
+}
 // Delete Task
 exports.deleteTask = async (req, res) => {
   try {
