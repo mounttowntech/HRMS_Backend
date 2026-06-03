@@ -1,20 +1,49 @@
 const router = require("express").Router();
-const c = require("../controllers/taskController");
+const taskController = require("../controllers/taskController");
 const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
+
 router.post(
   "/assign",
   verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin"),
-  c.assignTask,
+  allowRoles("admin", "hr", "teamlead", "projectmanager"),
+  taskController.createTask
 );
-router.patch("/:id/start", verifyToken, c.startTask);
-router.patch("/:id/daily-update", verifyToken, c.addDailyUpdate);
-router.patch("/:id/submit-review", verifyToken, c.submitTaskForReview);
-router.patch(
-  "/:id/review",
+
+router.get(
+  "/all",
   verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin"),
-  c.reviewTask,
+  taskController.getTasks
 );
-router.get("/all", verifyToken, c.getTasks);
+
+router.get(
+  "/:id",
+  verifyToken,
+  taskController.getTaskById
+);
+
+router.get(
+  "/project/:projectId",
+  verifyToken,
+  taskController.getTasksByProject
+);
+router.put(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr", "teamlead", "projectmanager"),
+  taskController.updateTask
+);
+
+router.patch(
+  "/:id/status",
+  verifyToken,
+  taskController.updateTaskStatus
+);
+
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr", "teamlead", "projectmanager"),
+  taskController.deleteTask
+);
+
 module.exports = router;
