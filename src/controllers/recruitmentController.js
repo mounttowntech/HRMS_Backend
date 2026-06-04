@@ -26,12 +26,33 @@ exports.applyCandidate = async (req, res) =>
     }),
   });
 
-  exports.getAppliedCandidates = async (req, res) => {
+exports.getAppliedCandidates = async (req, res) => {
   try {
     const candidates = await Candidate.find({
       companyId: req.user.companyId,
     })
-      .populate("jobPostId")
+      .populate("companyId", "companyName")
+      .populate({
+        path: "jobPostId",
+        populate: [
+          // {
+          //   path: "companyId",
+            
+          // },
+          {
+            path: "department",
+            select: "departmentName name",
+          },
+          {
+            path: "designation",
+            select: "designationName name",
+          },
+          {
+            path: "createdBy",
+            select: "userName email role",
+          },
+        ],
+      })
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -47,6 +68,7 @@ exports.applyCandidate = async (req, res) =>
     });
   }
 };
+
 
 exports.getAppliedCandidateById = async (req, res) => {
   try {
