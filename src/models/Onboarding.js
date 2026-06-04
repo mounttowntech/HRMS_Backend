@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+
 const schema = new mongoose.Schema(
   {
     companyId: {
@@ -6,11 +7,19 @@ const schema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+
+    candidateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Candidate",
+      default: null,
+    },
+
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
-      required: true,
+      default: null,
     },
+
     welcomeCompleted: { type: Boolean, default: false },
     personalInfoCompleted: { type: Boolean, default: false },
     jobInfoCompleted: { type: Boolean, default: false },
@@ -18,19 +27,16 @@ const schema = new mongoose.Schema(
     hrVerification: { type: Boolean, default: false },
     adminAccessAssigned: { type: Boolean, default: false },
     accountSetup: { type: Boolean, default: false },
+
     status: {
       type: String,
-      enum: [
-        "started",
-        "documents_pending",
-        "hr_verification",
-        "admin_access",
-        "completed",
-      ],
+      enum: ["started", "admin_access", "completed"],
       default: "started",
     },
+
     completedAt: Date,
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
 module.exports = mongoose.model("Onboarding", schema);

@@ -2,10 +2,10 @@ const router = require("express").Router();
 const c = require("../controllers/onboardingController");
 const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
 router.post(
-  "/:employeeId/start",
+  "/start-onboarding/:candidateId",
   verifyToken,
-  allowRoles("employer","hr", "admin"),
-  c.startOnboarding,
+  allowRoles("hr", "admin", "employer"),
+  c.startOnboarding
 );
 router.put("/:employeeId/step", verifyToken, c.updateStep);
 router.patch(
