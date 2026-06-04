@@ -310,3 +310,116 @@ exports.createEmployeeFromCandidate =
       });
     }
   };
+
+  exports.getAllJobPosts = async (req, res) => {
+  try {
+    const jobs = await JobPost.find({
+      companyId: req.user.companyId,
+    })
+      .populate("createdBy", "userName email role")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: "Job posts fetched successfully",
+      count: jobs.length,
+      jobs,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getJobPostById = async (req, res) => {
+  try {
+    const job = await JobPost.findOne({
+      _id: req.params.jobPostId,
+      companyId: req.user.companyId,
+    }).populate("createdBy", "userName email role");
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: "Job post not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Job post fetched successfully",
+      job,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.updateJobPostById = async (req, res) => {
+  try {
+    const job = await JobPost.findOneAndUpdate(
+      {
+        _id: req.params.jobPostId,
+        companyId: req.user.companyId,
+      },
+      {
+        ...req.body,
+        companyId: req.user.companyId,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: "Job post not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Job post updated successfully",
+      job,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.deleteJobPostById = async (req, res) => {
+  try {
+    const job = await JobPost.findOneAndDelete({
+      _id: req.params.jobPostId,
+      companyId: req.user.companyId,
+    });
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: "Job post not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Job post deleted successfully",
+      deletedJob: job,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};

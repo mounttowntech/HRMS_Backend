@@ -48,5 +48,31 @@ router.post(
   allowRoles("employer", "hr", "admin"),
   recruitmentController.createEmployeeFromCandidate
 );
+router.get(
+  "/job-posts",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAllJobPosts
+);
 
+router.get(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getJobPostById
+);
+
+router.put(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.updateJobPostById
+);
+
+router.delete(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.deleteJobPostById
+);
 module.exports = router;
