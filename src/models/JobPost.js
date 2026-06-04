@@ -6,9 +6,20 @@ const schema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
+
+    designation: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Designation",
+      required: true,
+    },
     title: { type: String, required: true },
-    department: String,
-    designation: String,
+
     description: String,
     skills: [String],
     openings: { type: Number, default: 1 },

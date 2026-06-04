@@ -26,6 +26,118 @@ exports.applyCandidate = async (req, res) =>
     }),
   });
 
+  exports.getAppliedCandidates = async (req, res) => {
+  try {
+    const candidates = await Candidate.find({
+      companyId: req.user.companyId,
+    })
+      .populate("jobPostId")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: "Applied candidates fetched successfully",
+      count: candidates.length,
+      candidates,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.getAppliedCandidateById = async (req, res) => {
+  try {
+    const candidate = await Candidate.findOne({
+      _id: req.params.candidateId,
+      companyId: req.user.companyId,
+    }).populate("jobPostId");
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Applied candidate not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Applied candidate fetched successfully",
+      candidate,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.updateAppliedCandidateById = async (req, res) => {
+  try {
+    const candidate = await Candidate.findOneAndUpdate(
+      {
+        _id: req.params.candidateId,
+        companyId: req.user.companyId,
+      },
+      {
+        ...req.body,
+        companyId: req.user.companyId,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).populate("jobPostId");
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Applied candidate not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Applied candidate updated successfully",
+      candidate,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+exports.deleteAppliedCandidateById = async (req, res) => {
+  try {
+    const candidate = await Candidate.findOneAndDelete({
+      _id: req.params.candidateId,
+      companyId: req.user.companyId,
+    });
+
+    if (!candidate) {
+      return res.status(404).json({
+        success: false,
+        message: "Applied candidate not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Applied candidate deleted successfully",
+      deletedCandidate: candidate,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 exports.resumeScreening = async (req, res) => {
   try {
     const { selected } = req.body;
@@ -311,11 +423,14 @@ exports.createEmployeeFromCandidate =
     }
   };
 
-  exports.getAllJobPosts = async (req, res) => {
+exports.getAllJobPosts = async (req, res) => {
   try {
     const jobs = await JobPost.find({
       companyId: req.user.companyId,
     })
+      .populate("companyId", "companyName")
+      .populate("department", "departmentName name")
+      .populate("designation", "designationName name")
       .populate("createdBy", "userName email role")
       .sort({ createdAt: -1 });
 
@@ -332,7 +447,6 @@ exports.createEmployeeFromCandidate =
     });
   }
 };
-
 exports.getJobPostById = async (req, res) => {
   try {
     const job = await JobPost.findOne({

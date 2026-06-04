@@ -75,4 +75,33 @@ router.delete(
   allowRoles("hr", "admin", "employer"),
   recruitmentController.deleteJobPostById
 );
+router.get(
+  "/applied-candidates",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAppliedCandidates
+);
+
+router.get(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAppliedCandidateById
+);
+router.put(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.updateAppliedCandidateById
+);
+router.delete(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.deleteAppliedCandidateById
+);
+
+
+
+
 module.exports = router;
