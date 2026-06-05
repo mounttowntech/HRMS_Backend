@@ -1,9 +1,10 @@
 const jwt = require("jsonwebtoken");
+
 const User = require("../models/User");
 const Company = require("../models/Company");
-const sendMail = require("../utils/sendMail");
 const Employee = require("../models/Employee");
-const bcrypt = require("bcryptjs");
+
+const sendMail = require("../utils/sendMail");
 const passwordChangedTemplate = require("../templates/passwordChangeTemplate");
 
 const generateToken = (user) => {
@@ -16,13 +17,10 @@ const generateToken = (user) => {
       employeeId: user.employeeId,
     },
     process.env.JWT_SECRET,
-    {
-      expiresIn: "7d",
-    },
+    { expiresIn: "7d" }
   );
 };
 
-// REGISTER EMPLOYER WITHOUT TOKEN
 exports.registerEmployer = async (req, res) => {
   try {
     const { name, email, phone, password, companyName, industryType } =
@@ -80,8 +78,6 @@ exports.registerEmployer = async (req, res) => {
   }
 };
 
-// LOGIN
-
 exports.login = async (req, res) => {
   try {
     const email = req.body.email?.trim().toLowerCase();
@@ -103,7 +99,7 @@ exports.login = async (req, res) => {
       });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await user.comparePassword(password);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -189,14 +185,11 @@ exports.forgotPassword = async (req, res) => {
       });
     }
 
-    const otp = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     user.resetOTP = otp;
-     user.resetOTPExpire = new Date(
-      Date.now() + 15 * 60 * 1000
-    );
+    user.resetOTPExpire = new Date(Date.now() + 5 * 60 * 1000);
+
     await user.save();
 
     await sendMail({
@@ -206,15 +199,10 @@ exports.forgotPassword = async (req, res) => {
         <div style="font-family:Arial,sans-serif">
           <h2>Reset Password OTP</h2>
           <p>Hello ${user.name || user.email},</p>
-
           <p>Your OTP is:</p>
-
           <h1 style="color:#2563eb">${otp}</h1>
-
           <p>This OTP will expire in 5 minutes.</p>
-
           <br/>
-
           <p>Mounttown HRMS Team</p>
         </div>
       `,
@@ -232,14 +220,19 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
-
 exports.verifyOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const email = req.body.email?.trim().toLowerCase();
+    const otp = req.body.otp?.trim();
 
-    const user = await User.findOne({
-      email: email.trim().toLowerCase(),
-    });
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(404).json({
@@ -249,7 +242,9 @@ exports.verifyOtp = async (req, res) => {
     }
 
     if (
+      !user.resetOTP ||
       user.resetOTP !== otp ||
+      !user.resetOTPExpire ||
       user.resetOTPExpire < Date.now()
     ) {
       return res.status(400).json({
@@ -264,9 +259,7 @@ exports.verifyOtp = async (req, res) => {
         purpose: "RESET_PASSWORD",
       },
       process.env.JWT_SECRET,
-      {
-        expiresIn: "10m",
-      }
+      { expiresIn: "10m" }
     );
 
     res.status(200).json({
@@ -282,7 +275,6 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-// CHANGE PASSWORD
 exports.changePassword = async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmPassword } = req.body;
@@ -317,7 +309,7 @@ exports.changePassword = async (req, res) => {
       });
     }
 
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    const isMatch = await user.comparePassword(oldPassword);
 
     if (!isMatch) {
       return res.status(400).json({
@@ -350,7 +342,7 @@ exports.changePassword = async (req, res) => {
     });
   }
 };
-// RESET PASSWORD TEMPORARY
+
 exports.resetPassword = async (req, res) => {
   try {
     const email = req.body.email?.trim().toLowerCase();
@@ -389,7 +381,6 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
-// LOGGED IN USER
 exports.me = async (req, res) => {
   try {
     const user = await User.findById(req.user.id)
