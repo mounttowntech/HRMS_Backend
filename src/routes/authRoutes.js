@@ -17,7 +17,7 @@ const {
 // ✅ Public routes
 router.post("/register-employer", registerEmployer);
 router.post("/login", login);
-router.post("/reset-password", resetPassword);
+router.post("/reset-password", verifyToken,resetPassword);
 router.post("/forgot-password", forgotPassword);
 
 

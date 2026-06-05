@@ -98,10 +98,10 @@ const defaultRolePermissions = [
 // CREATE ROLE
 exports.createRole = async (req, res) => {
   try {
-    const { roleName, permissions } = req.body;
-    const companyId = req.user.companyId;
+    const { roleName, permissions,companyId  } = req.body;
+    const userCompanyId = req.user.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return res.status(400).json({
         success: false,
         message: "companyId missing in token",
@@ -210,7 +210,7 @@ exports.getRoles = async (req, res) => {
       });
     }
 
-    let roles = await RolePermission.find({ companyId });
+    let roles = await RolePermission.find();
 
     if (roles.length === 0) {
       const insertData = defaultRolePermissions.map((role) => ({
@@ -271,8 +271,8 @@ exports.getRoleById = async (req, res) => {
 // UPDATE ROLE
 exports.updateRole = async (req, res) => {
   try {
-    const { roleName, permissions } = req.body || {};
-    const companyId = req.user?.companyId;
+    const { roleName, permissions, companyId } = req.body || {};
+    const userCompanyId = req.user?.companyId;
 
     const roleById = await RolePermission.findById(req.params.id);
 
@@ -284,14 +284,14 @@ exports.updateRole = async (req, res) => {
       });
     }
 
-    if (roleById.companyId.toString() !== companyId.toString()) {
-      return res.status(400).json({
-        success: false,
-        message: "Role companyId and token companyId not matching",
-        roleCompanyId: roleById.companyId,
-        tokenCompanyId: companyId,
-      });
-    }
+    // if (roleById.companyId.toString() !== userCompanyId.toString()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Role companyId and token companyId not matching",
+    //     roleCompanyId: roleById.companyId,
+    //     tokenCompanyId: companyId,
+    //   });
+    // }
 
     const company = await Company.findById(companyId);
 
@@ -303,6 +303,7 @@ exports.updateRole = async (req, res) => {
       });
     }
 
+
     if (roleName) roleById.roleName = roleName;
 
     if (permissions) {
@@ -311,6 +312,8 @@ exports.updateRole = async (req, res) => {
         ...permissions,
       };
     }
+
+    if (companyId) roleById.companyId = companyId;
 
     await roleById.save();
 
@@ -335,15 +338,16 @@ exports.updateRole = async (req, res) => {
     });
   }
 };
+
 // DELETE ROLE
 exports.deleteRole = async (req, res) => {
   try {
-    const companyId = req.user.companyId;
+    const roleId = req.params.id;
 
-    const role = await RolePermission.findOneAndDelete({
-      _id: req.params.id,
-      companyId,
-    });
+    const role =
+      await RolePermission.findById(
+        roleId
+      );
 
     if (!role) {
       return res.status(404).json({
@@ -351,6 +355,10 @@ exports.deleteRole = async (req, res) => {
         message: "Role not found",
       });
     }
+
+    await RolePermission.findByIdAndDelete(
+      roleId
+    );
 
     return res.status(200).json({
       success: true,

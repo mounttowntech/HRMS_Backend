@@ -454,19 +454,35 @@ exports.changePassword = async (req, res) => {
   }
 };
 
+// RESET PASSWORD
 exports.resetPassword = async (req, res) => {
   try {
-    const email = req.body.email?.trim().toLowerCase();
-    const newPassword = req.body.password?.trim();
+    const { newPassword, confirmPassword } = req.body;
 
-    if (!email || !newPassword) {
+    if (!newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "New password and confirm password are required",
       });
     }
 
-    const user = await User.findOne({ email }).select("+password");
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    // ← THIS WAS MISSING — fetch user from resetToken
+    const userId = req.user.id || req.user.userId;
+    const user = await User.findById(userId).select("+password");
 
     if (!user) {
       return res.status(404).json({
@@ -477,7 +493,8 @@ exports.resetPassword = async (req, res) => {
 
     user.password = newPassword;
     user.lastPasswordChangedAt = new Date();
-
+    user.resetOTP = undefined;
+    user.resetOTPExpire = undefined;
     await user.save();
 
     res.status(200).json({
@@ -491,6 +508,7 @@ exports.resetPassword = async (req, res) => {
     });
   }
 };
+
 
 exports.me = async (req, res) => {
   try {
