@@ -27,7 +27,6 @@ const schema = new mongoose.Schema(
     hrVerification: { type: Boolean, default: false },
     adminAccessAssigned: { type: Boolean, default: false },
     accountSetup: { type: Boolean, default: false },
-
     status: {
       type: String,
       enum: ["started", "admin_access", "completed"],
