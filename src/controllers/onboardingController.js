@@ -133,6 +133,94 @@ exports.startOnboarding = async (req, res) => {
   }
 };
 
+exports.getOnboardingList = async (req, res) => {
+  try {
+    const {
+      status,
+      search,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const filter = {
+      companyId: req.user.companyId,
+    };
+
+    if (status) {
+      filter.status = status;
+    }
+
+    let onboardingQuery = Onboarding.find(filter)
+      .populate({
+        path: "candidateId",
+        select: "fullName email phone status jobPostId",
+      })
+      .populate({
+        path: "employeeId",
+        select:
+          "employeeCode fullName email phone role salary status departmentId designationId",
+        populate: [
+          {
+            path: "departmentId",
+            select: "name",
+          },
+          {
+            path: "designationId",
+            select: "name",
+          },
+        ],
+      })
+      .sort({ createdAt: -1 });
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    let onboardingList = await onboardingQuery
+      .skip(skip)
+      .limit(Number(limit));
+
+    if (search) {
+      const searchText = search.toLowerCase();
+
+      onboardingList = onboardingList.filter((item) => {
+        const candidateName = item.candidateId?.fullName?.toLowerCase() || "";
+        const candidateEmail = item.candidateId?.email?.toLowerCase() || "";
+        const employeeName = item.employeeId?.fullName?.toLowerCase() || "";
+        const employeeEmail = item.employeeId?.email?.toLowerCase() || "";
+        const employeeCode = item.employeeId?.employeeCode?.toLowerCase() || "";
+
+        return (
+          candidateName.includes(searchText) ||
+          candidateEmail.includes(searchText) ||
+          employeeName.includes(searchText) ||
+          employeeEmail.includes(searchText) ||
+          employeeCode.includes(searchText)
+        );
+      });
+    }
+
+    const total = await Onboarding.countDocuments(filter);
+
+    res.status(200).json({
+      success: true,
+      message: "Onboarding list fetched successfully",
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit)),
+      },
+      count: onboardingList.length,
+      onboardingList,
+    });
+  } catch (error) {
+    console.log("GET ONBOARDING LIST ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 exports.updateStep = async (req, res) => {
   try {
     const onboarding = await Onboarding.findOneAndUpdate(

@@ -7,6 +7,7 @@ router.post(
   allowRoles("hr", "admin", "employer"),
   c.startOnboarding
 );
+router.get("/list", verifyToken, c.getOnboardingList);
 router.put("/:employeeId/step", verifyToken, c.updateStep);
 router.patch(
   "/:employeeId/hr-verify",
