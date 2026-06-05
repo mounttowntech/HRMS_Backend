@@ -1,5 +1,24 @@
 const mongoose = require("mongoose");
 
+const fileSchema = new mongoose.Schema(
+  {
+    fileName: String,
+    fileUrl: String,
+    mimeType: String,
+    size: Number,
+    status: {
+      type: String,
+      enum: ["pending", "uploaded", "verified", "rejected"],
+      default: "pending",
+    },
+    remarks: {
+      type: String,
+      default: "",
+    },
+  },
+  { _id: false }
+);
+
 const onboardingDocumentSchema = new mongoose.Schema(
   {
     companyId: {
@@ -20,80 +39,6 @@ const onboardingDocumentSchema = new mongoose.Schema(
       required: true,
     },
 
-    aadhaar: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    pan: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    tenthMarksheet: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    twelfthMarksheet: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    experienceLetter: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    salarySlip: {
-      fileName: String,
-      fileUrl: String,
-      mimeType: String,
-      size: Number,
-      status: {
-        type: String,
-        enum: ["uploaded", "verified", "rejected"],
-        default: "uploaded",
-      },
-    },
-
-    remarks: String,
-
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -102,11 +47,40 @@ const onboardingDocumentSchema = new mongoose.Schema(
     verifiedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
+    },
+
+    aadhaar: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
+    },
+
+    pan: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
+    },
+
+    tenthMarksheet: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
+    },
+
+    twelfthMarksheet: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
+    },
+
+    experienceLetter: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
+    },
+
+    salarySlip: {
+      type: fileSchema,
+      default: () => ({ status: "pending" }),
     },
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 module.exports = mongoose.model(

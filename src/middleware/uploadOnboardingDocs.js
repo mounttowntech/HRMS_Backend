@@ -2,7 +2,7 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-const uploadPath = "uploads/onboarding";
+const uploadPath = path.join(__dirname, "../../uploads/onboarding");
 
 if (!fs.existsSync(uploadPath)) {
   fs.mkdirSync(uploadPath, { recursive: true });
@@ -14,46 +14,34 @@ const storage = multer.diskStorage({
   },
 
   filename: function (req, file, cb) {
-    const uniqueName =
-      file.fieldname +
-      "-" +
-      Date.now() +
-      "-" +
-      Math.round(Math.random() * 1e9) +
-      path.extname(file.originalname);
+    const ext = path.extname(file.originalname);
+    const fieldName = file.fieldname;
 
-    cb(null, uniqueName);
+    cb(null, `${fieldName}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
   },
 });
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = [
-    "application/pdf",
     "image/jpeg",
     "image/jpg",
     "image/png",
+    "application/pdf",
   ];
 
   if (!allowedTypes.includes(file.mimetype)) {
-    return cb(new Error("Only PDF, JPG, JPEG and PNG files are allowed"), false);
+    return cb(new Error("Only JPG, PNG and PDF files are allowed"), false);
   }
 
   cb(null, true);
 };
 
-const uploadOnboardingDocs = multer({
+const uploadOnboardingDocuments = multer({
   storage,
   fileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024,
   },
-}).fields([
-  { name: "aadhaar", maxCount: 1 },
-  { name: "pan", maxCount: 1 },
-  { name: "tenth_marksheet", maxCount: 1 },
-  { name: "twelfth_marksheet", maxCount: 1 },
-  { name: "experience_letter", maxCount: 1 },
-  { name: "three_month_salary_slip", maxCount: 1 },
-]);
+});
 
-module.exports = uploadOnboardingDocs;
+module.exports = uploadOnboardingDocuments;

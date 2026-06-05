@@ -7,13 +7,20 @@ const {
   verifySingleOnboardingDocument,
 } = require("../controllers/onboardingDocument");
 
-const uploadOnboardingDocs = require("../middleware/uploadOnboardingDocs");
+const uploadOnboardingDocuments = require("../middleware/uploadOnboardingDocs");
 const { verifyToken } = require("../middleware/authMiddleware");
 
 router.post(
   "/upload/:employeeId",
   verifyToken,
-  uploadOnboardingDocs,
+  uploadOnboardingDocuments.fields([
+    { name: "aadhaar", maxCount: 1 },
+    { name: "pan", maxCount: 1 },
+    { name: "tenthMarksheet", maxCount: 1 },
+    { name: "twelfthMarksheet", maxCount: 1 },
+    { name: "experienceLetter", maxCount: 1 },
+    { name: "salarySlip", maxCount: 1 },
+  ]),
   uploadAllOnboardingDocuments
 );
 

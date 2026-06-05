@@ -5,10 +5,10 @@ const Employee = require("../models/Employee");
 const requiredDocuments = [
   "aadhaar",
   "pan",
-  "tenth_marksheet",
-  "twelfth_marksheet",
-  "experience_letter",
-  "three_month_salary_slip",
+  "tenthMarksheet",
+  "twelfthMarksheet",
+  "experienceLetter",
+  "salarySlip",
 ];
 
 const makeFileData = (file) => {
@@ -93,6 +93,7 @@ exports.uploadAllOnboardingDocuments = async (req, res) => {
 
     if (uploadedAllDocuments) {
       onboarding.documentsUploaded = true;
+      onboarding.status = "hr_verification";
       await onboarding.save();
     }
 
@@ -125,7 +126,7 @@ exports.getEmployeeOnboardingDocuments = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       documents,
     });
@@ -180,7 +181,7 @@ exports.verifySingleOnboardingDocument = async (req, res) => {
 
     await document.save();
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: `${documentName} ${status} successfully`,
       document,
