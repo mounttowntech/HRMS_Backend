@@ -31,10 +31,10 @@ router.get(
   allowRoles("teamlead", "admin", "employer"),
   c.teamLeadDashboard,
 );
-// router.get(
-//   "/project-manager",
-//   verifyToken,
-//   allowRoles("projectmanager", "admin", "employer"),
-//   c.projectManagerDashboard,
-// );
+router.get(
+  "/project-manager",
+  verifyToken,
+  allowRoles("projectmanager", "admin"),
+  c.projectManagerDashboard,
+);
 module.exports = router;

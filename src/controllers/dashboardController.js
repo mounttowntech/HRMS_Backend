@@ -175,33 +175,33 @@ exports.teamLeadDashboard = async (req, res) => {
     },
   });
 };
-// exports.projectManagerDashboard = async (req, res) => {
-//   const companyId = req.user.companyId;
-//   res.json({
-//     success: true,
-//     dashboard: {
-//       activeProjects: await Project.countDocuments({
-//         companyId,
-//         projectManager: req.user.employeeId,
-//         status: { $ne: "closed" },
-//       }),
-//       tasksInProgress: await Task.countDocuments({
-//         companyId,
-//         status: "in_progress",
-//       }),
-//       tasksCompleted: await Task.countDocuments({
-//         companyId,
-//         status: "closed",
-//       }),
-//       overdueTasks: await Task.countDocuments({
-//         companyId,
-//         dueDate: { $lt: new Date() },
-//         status: { $ne: "closed" },
-//       }),
-//       projects: await Project.find({
-//         companyId,
-//         projectManager: req.user.employeeId,
-//       }).limit(10),
-//     },
-//   });
-// };
+exports.projectManagerDashboard = async (req, res) => {
+  const companyId = req.user.companyId;
+  res.json({
+    success: true,
+    dashboard: {
+      activeProjects: await Project.countDocuments({
+        companyId,
+        projectManager: req.user.employeeId,
+        status: { $ne: "closed" },
+      }),
+      tasksInProgress: await Task.countDocuments({
+        companyId,
+        status: "in_progress",
+      }),
+      tasksCompleted: await Task.countDocuments({
+        companyId,
+        status: "closed",
+      }),
+      overdueTasks: await Task.countDocuments({
+        companyId,
+        dueDate: { $lt: new Date() },
+        status: { $ne: "closed" },
+      }),
+      projects: await Project.find({
+        companyId,
+        projectManager: req.user.employeeId,
+      }).limit(10),
+    },
+  });
+};
