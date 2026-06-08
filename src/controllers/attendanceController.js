@@ -3,7 +3,11 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
-
+const {
+  getISTDateString,
+  getISTStartOfDay,
+  getISTEndOfDay,
+} = require("../utils/attendanceDate");
 // ======================================================
 // DATE HELPERS
 // ======================================================
@@ -150,14 +154,6 @@ exports.employeePunchIn = async (req, res) => {
   try {
     const { employeeCode } = req.body;
 
-    if (!employeeCode) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeCode is mandatory",
-      });
-    }
-
-    // Find employee by employeeCode
     const employee = await Employee.findOne({
       companyId: req.user.companyId,
       employeeCode,
@@ -171,27 +167,29 @@ exports.employeePunchIn = async (req, res) => {
       });
     }
 
-    // Check today's attendance
+    const attendanceDate = getISTDateString();
+
     let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      date: today(),
+      attendanceDate,
     });
 
-    // Already punched in
-    if (attendance && attendance.punchIn) {
+    if (attendance?.punchIn) {
       return res.status(400).json({
         success: false,
         message: "Already punched in today",
       });
     }
 
-    // Create attendance if not exists
     if (!attendance) {
       attendance = new Attendance({
         companyId: req.user.companyId,
         employeeId: employee._id,
-        date: today(),
+
+        date: getISTStartOfDay(),
+
+        attendanceDate,
       });
     }
 
@@ -201,21 +199,20 @@ exports.employeePunchIn = async (req, res) => {
 
     await attendance.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Punch in saved successfully",
+      message: "Punch In Successful",
       attendance,
     });
   } catch (error) {
-    console.log("PUNCH IN ERROR:", error);
+    console.log(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
 // ======================================================
 // EMPLOYEE PUNCH OUT
 // ======================================================
@@ -224,14 +221,6 @@ exports.employeePunchOut = async (req, res) => {
   try {
     const { employeeCode } = req.body;
 
-    if (!employeeCode) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeCode is mandatory",
-      });
-    }
-
-    // Find Employee
     const employee = await Employee.findOne({
       companyId: req.user.companyId,
       employeeCode,
@@ -245,28 +234,28 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    // Find Today's Attendance
+    const attendanceDate = getISTDateString();
+
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      date: today(),
+      attendanceDate,
     });
 
     if (!attendance || !attendance.punchIn) {
       return res.status(400).json({
         success: false,
-        message: "Punch in first",
+        message: "Punch In First",
       });
     }
 
     if (attendance.punchOut) {
       return res.status(400).json({
         success: false,
-        message: "Already punched out today",
+        message: "Already Punched Out",
       });
     }
 
-    // Save Punch Out
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
 
@@ -274,15 +263,15 @@ exports.employeePunchOut = async (req, res) => {
 
     await attendance.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Punch out saved successfully",
+      message: "Punch Out Successful",
       attendance,
     });
   } catch (error) {
-    console.log("PUNCH OUT ERROR:", error);
+    console.log(error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
