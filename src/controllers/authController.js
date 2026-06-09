@@ -528,3 +528,114 @@ exports.me = async (req, res) => {
     });
   }
 };
+
+exports.updateRoleBasedProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const companyId = req.user.companyId;
+    const employeeId = req.user.employeeId;
+    const role = req.user.role;
+
+    const {
+      name,
+      phone,
+      location,
+      address,
+      dateOfBirth,
+      gender,
+      emergencyContactName,
+      emergencyContactPhone,
+    } = req.body;
+
+    const allowedRoles = [
+      "admin",
+      "hr",
+      "teamlead",
+      "projectmanager",
+      "employee",
+    ];
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to update profile",
+      });
+    }
+
+    const user = await User.findOne({
+      _id: userId,
+      companyId,
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (name !== undefined) user.name = name;
+    if (phone !== undefined) user.phone = phone;
+
+    await user.save();
+
+    let employee = null;
+
+    if (employeeId) {
+      employee = await Employee.findOne({
+        _id: employeeId,
+        companyId,
+      });
+
+      if (employee) {
+        if (name !== undefined) employee.fullName = name;
+        if (phone !== undefined) employee.phone = phone;
+        if (location !== undefined) employee.location = location;
+        if (address !== undefined) employee.address = address;
+        if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth;
+        if (gender !== undefined) employee.gender = gender;
+
+        if (emergencyContactName !== undefined) {
+          employee.emergencyContactName = emergencyContactName;
+        }
+
+        if (emergencyContactPhone !== undefined) {
+          employee.emergencyContactPhone = emergencyContactPhone;
+        }
+
+        await employee.save();
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      profile: {
+        userId: user._id,
+        companyId: user.companyId,
+        employeeId: employee?._id || null,
+
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+
+        employeeCode: employee?.employeeCode || null,
+        employeeName: employee?.fullName || null,
+        employeeRole: employee?.role || null,
+        departmentId: employee?.departmentId || null,
+        designationId: employee?.designationId || null,
+        location: employee?.location || null,
+        address: employee?.address || null,
+        status: employee?.status || null,
+      },
+    });
+  } catch (error) {
+    console.log("ROLE BASED PROFILE UPDATE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
