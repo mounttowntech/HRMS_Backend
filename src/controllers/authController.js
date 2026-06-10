@@ -512,14 +512,29 @@ exports.resetPassword = async (req, res) => {
 
 exports.me = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
+    let user = await User.findById(req.user.id)
       .select("-password")
       .populate("companyId")
       .populate("employeeId");
 
+    let employee = null;
+
+    if (!user.employeeId) {
+      employee = await Employee.findOne({
+        userId: user._id,
+      });
+
+      if (employee) {
+        user.employeeId = employee._id;
+        user.companyId = employee.companyId;
+        await user.save();
+      }
+    }
+
     res.json({
       success: true,
       user,
+      employee,
     });
   } catch (error) {
     res.status(500).json({
@@ -528,13 +543,9 @@ exports.me = async (req, res) => {
     });
   }
 };
-
 exports.updateRoleBasedProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const companyId = req.user.companyId;
-    const employeeId = req.user.employeeId;
-    const role = req.user.role;
 
     const {
       name,
@@ -555,17 +566,14 @@ exports.updateRoleBasedProfile = async (req, res) => {
       "employee",
     ];
 
-    if (!allowedRoles.includes(role)) {
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: "You are not allowed to update profile",
       });
     }
 
-    const user = await User.findOne({
-      _id: userId,
-      companyId,
-    });
+    const user = await User.findById(userId);
 
     if (!user) {
       return res.status(404).json({
@@ -579,40 +587,53 @@ exports.updateRoleBasedProfile = async (req, res) => {
 
     await user.save();
 
-    let employee = null;
+    let employee = await Employee.findOne({
+      userId: user._id,
+    });
 
-    if (employeeId) {
-      employee = await Employee.findOne({
-        _id: employeeId,
-        companyId,
-      });
-
-      if (employee) {
-        if (name !== undefined) employee.fullName = name;
-        if (phone !== undefined) employee.phone = phone;
-        if (location !== undefined) employee.location = location;
-        if (address !== undefined) employee.address = address;
-        if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth;
-        if (gender !== undefined) employee.gender = gender;
-
-        if (emergencyContactName !== undefined) {
-          employee.emergencyContactName = emergencyContactName;
-        }
-
-        if (emergencyContactPhone !== undefined) {
-          employee.emergencyContactPhone = emergencyContactPhone;
-        }
-
-        await employee.save();
-      }
+    if (!employee && user.employeeId) {
+      employee = await Employee.findById(user.employeeId);
     }
 
-    res.status(200).json({
+    if (!employee) {
+      employee = await Employee.findOne({
+        email: user.email,
+      });
+    }
+
+    if (employee) {
+      if (name !== undefined) employee.fullName = name;
+      if (phone !== undefined) employee.phone = phone;
+      if (location !== undefined) employee.location = location;
+      if (address !== undefined) employee.address = address;
+      if (dateOfBirth !== undefined) employee.dateOfBirth = dateOfBirth;
+      if (gender !== undefined) employee.gender = gender;
+      if (emergencyContactName !== undefined) {
+        employee.emergencyContactName = emergencyContactName;
+      }
+      if (emergencyContactPhone !== undefined) {
+        employee.emergencyContactPhone = emergencyContactPhone;
+      }
+
+      await employee.save();
+
+      if (!user.employeeId) {
+        user.employeeId = employee._id;
+      }
+
+      if (!user.companyId) {
+        user.companyId = employee.companyId;
+      }
+
+      await user.save();
+    }
+
+    return res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       profile: {
         userId: user._id,
-        companyId: user.companyId,
+        companyId: user.companyId || employee?.companyId || null,
         employeeId: employee?._id || null,
 
         name: user.name,
@@ -625,14 +646,230 @@ exports.updateRoleBasedProfile = async (req, res) => {
         employeeRole: employee?.role || null,
         departmentId: employee?.departmentId || null,
         designationId: employee?.designationId || null,
-        location: employee?.location || null,
-        address: employee?.address || null,
+        location: employee?.location || "",
+        address: employee?.address || "",
+        dateOfBirth: employee?.dateOfBirth || null,
+        gender: employee?.gender || "",
+        emergencyContactName: employee?.emergencyContactName || "",
+        emergencyContactPhone: employee?.emergencyContactPhone || "",
         status: employee?.status || null,
       },
     });
   } catch (error) {
     console.log("ROLE BASED PROFILE UPDATE ERROR:", error);
 
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// CREATE PROFILE
+exports.createRoleBasedProfile = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    const {
+      name,
+      email,
+      phone,
+      password,
+      role,
+      employeeCode,
+      departmentId,
+      designationId,
+    } = req.body;
+
+    const allowedRoles = ["admin", "hr", "teamlead", "projectmanager", "employee"];
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid role",
+      });
+    }
+
+    const existingUser = await User.findOne({
+      email: email?.trim().toLowerCase(),
+    });
+
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists",
+      });
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      phone,
+      password: password || "Welcome@123",
+      role,
+      companyId,
+      isActive: true,
+    });
+
+    const employee = await Employee.create({
+      companyId,
+      userId: user._id,
+      employeeCode,
+      fullName: name,
+      email,
+      phone,
+      role,
+      departmentId,
+      designationId,
+      status: "active",
+    });
+
+    user.employeeId = employee._id;
+    await user.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Profile created successfully",
+      user,
+      employee,
+    });
+  } catch (error) {
+    console.log("CREATE PROFILE ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// READ PROFILE BY ID
+exports.getRoleBasedProfileById = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    const employee = await Employee.findOne({
+      _id: req.params.id,
+      companyId,
+    })
+      .populate("userId", "name email phone role isActive")
+      .populate("departmentId", "name")
+      .populate("designationId", "name");
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      profile: employee,
+    });
+  } catch (error) {
+    console.log("GET PROFILE BY ID ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// UPDATE PROFILE BY ID
+exports.updateRoleBasedProfileById = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    const {
+      name,
+      phone,
+      role,
+      departmentId,
+      designationId,
+      status,
+    } = req.body;
+
+    const employee = await Employee.findOne({
+      _id: req.params.id,
+      companyId,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
+    }
+
+    if (name !== undefined) employee.fullName = name;
+    if (phone !== undefined) employee.phone = phone;
+    if (role !== undefined) employee.role = role;
+    if (departmentId !== undefined) employee.departmentId = departmentId;
+    if (designationId !== undefined) employee.designationId = designationId;
+    if (status !== undefined) employee.status = status;
+
+    await employee.save();
+
+    if (employee.userId) {
+      const user = await User.findOne({
+        _id: employee.userId,
+        companyId,
+      });
+
+      if (user) {
+        if (name !== undefined) user.name = name;
+        if (phone !== undefined) user.phone = phone;
+        if (role !== undefined) user.role = role;
+
+        await user.save();
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      profile: employee,
+    });
+  } catch (error) {
+    console.log("UPDATE PROFILE ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// DELETE PROFILE BY ID
+exports.deleteRoleBasedProfileById = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    const employee = await Employee.findOne({
+      _id: req.params.id,
+      companyId,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Profile not found",
+      });
+    }
+
+    if (employee.userId) {
+      await User.findOneAndDelete({
+        _id: employee.userId,
+        companyId,
+      });
+    }
+
+    await Employee.findOneAndDelete({
+      _id: req.params.id,
+      companyId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Profile deleted successfully",
+    });
+  } catch (error) {
+    console.log("DELETE PROFILE ERROR:", error);
     res.status(500).json({
       success: false,
       message: error.message,

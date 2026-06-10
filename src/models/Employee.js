@@ -41,7 +41,40 @@ const employeeSchema = new mongoose.Schema(
     },
 
     phone: String,
+    location: {
+      type: String,
+      default: "",
+      trim: true,
+    },
 
+    address: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+
+    gender: {
+      type: String,
+      enum: ["male", "female", "other", ""],
+      default: "",
+    },
+
+    emergencyContactName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    emergencyContactPhone: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     profileImage: {
       type: String,
       default: "",
@@ -120,26 +153,20 @@ const employeeSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // company-wise unique indexes
-employeeSchema.index(
-  { companyId: 1, email: 1 },
-  { unique: true }
-);
+employeeSchema.index({ companyId: 1, email: 1 }, { unique: true });
 
-employeeSchema.index(
-  { companyId: 1, employeeCode: 1 },
-  { unique: true }
-);
+employeeSchema.index({ companyId: 1, employeeCode: 1 }, { unique: true });
 
 employeeSchema.index(
   { companyId: 1, biometricUserId: 1 },
   {
     unique: true,
     sparse: true,
-  }
+  },
 );
 
 module.exports = mongoose.model("Employee", employeeSchema);
