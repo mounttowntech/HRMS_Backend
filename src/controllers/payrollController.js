@@ -1,249 +1,221 @@
-const Payroll = require("../models/Payroll");
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
-const Leave = require("../models/Leave");
-const sendMail = require("../utils/sendMail");
+const Payroll = require("../models/Payroll");
 
-const payrollPayslipTemplate = require(
-  "../templates/payrollPayslipTemplate"
-);
+const {
+  getMonthRangeByMonthYear,
+} = require("../utils/dashboardUtils");
 
-const getMonthName = (month, year) => {
-  return new Date(year, month - 1).toLocaleString("en-US", {
-    month: "long",
-  });
+const generatePayslip = require("../utils/generatePayslip");
+
+const roundAmount = (amount) => {
+  return Number((amount || 0).toFixed(2));
 };
 
-// ===============================
-// PROCESS PAYROLL
-// all employees OR single employee
-// ===============================
 exports.processPayroll = async (req, res) => {
   try {
-    const { month, year, employeeId } = req.body;
+    const companyId = req.user.companyId;
+    const { month, year } = req.body;
 
     if (!month || !year) {
       return res.status(400).json({
         success: false,
-        message: "month and year are required",
+        message: "Month and year are required",
       });
     }
 
-    const employeeFilter = {
-      companyId: req.user.companyId,
+    const existingPayroll = await Payroll.findOne({
+      companyId,
+      month,
+      year,
+    });
+
+    if (existingPayroll) {
+      return res.status(400).json({
+        success: false,
+        message: "Payroll already processed for this month",
+      });
+    }
+
+    const { start, end } = getMonthRangeByMonthYear(month, year);
+
+    const totalWorkingDays = new Date(year, month, 0).getDate();
+
+    const employees = await Employee.find({
+      companyId,
       status: "active",
-    };
-
-    if (employeeId) {
-      employeeFilter._id = employeeId;
-    }
-
-    const employees = await Employee.find(employeeFilter);
-
-    if (employees.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No active employees found",
-      });
-    }
-
-    const payrolls = [];
-
-    for (const emp of employees) {
-      const start = new Date(year, month - 1, 1);
-      const end = new Date(year, month, 0, 23, 59, 59);
-
-      const attendanceDays = await Attendance.countDocuments({
-        companyId: req.user.companyId,
-        employeeId: emp._id,
-        date: {
-          $gte: start,
-          $lte: end,
-        },
-        status: {
-          $in: ["present", "half_day"],
-        },
-      });
-
-      const leaves = await Leave.find({
-        companyId: req.user.companyId,
-        employeeId: emp._id,
-        status: "approved",
-        fromDate: {
-          $lte: end,
-        },
-        toDate: {
-          $gte: start,
-        },
-      });
-
-      const leaveDays = leaves.reduce((sum, leave) => {
-        return sum + (leave.days || 0);
-      }, 0);
-
-      const basicSalary = emp.salary || 0;
-      const allowances = Math.round(basicSalary * 0.1);
-      const deductions = 0;
-      const leaveDeduction = 0;
-
-      const netSalary = Math.round(
-        basicSalary + allowances - deductions - leaveDeduction
-      );
-
-      const payroll = await Payroll.findOneAndUpdate(
-        {
-          companyId: req.user.companyId,
-          employeeId: emp._id,
-          month,
-          year,
-        },
-        {
-          companyId: req.user.companyId,
-          employeeId: emp._id,
-          month,
-          year,
-          attendanceDays,
-          leaveDays,
-          basicSalary,
-          allowances,
-          deductions,
-          leaveDeduction,
-          netSalary,
-          payslipPdfUrl: "",
-          status: "net_salary_generated",
-        },
-        {
-          new: true,
-          upsert: true,
-          setDefaultsOnInsert: true,
-        }
-      ).populate("employeeId", "employeeCode fullName email salary");
-
-      payrolls.push(payroll);
-    }
-
-    res.status(200).json({
-      success: true,
-      message: employeeId
-        ? "Salary processed for selected employee"
-        : "Salary processed for all active employees",
-      count: payrolls.length,
-      payrolls,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// ===============================
-// GENERATE PAYSLIP
-// use payroll _id only
-// ===============================
-exports.generatePayslip = async (req, res) => {
-  try {
-    const payroll = await Payroll.findOne({
-      _id: req.params.id,
-      companyId: req.user.companyId,
-    }).populate("employeeId", "employeeCode fullName email");
-
-    if (!payroll) {
-      return res.status(404).json({
-        success: false,
-        message: "Payroll not found",
-      });
-    }
-
-    const monthName = getMonthName(payroll.month, payroll.year);
-
-    payroll.payslipPdfUrl = `/payslips/${payroll.employeeId.employeeCode}-${monthName}-${payroll.year}.pdf`;
-    payroll.status = "payslip_generated";
-
-    await payroll.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Payslip PDF generated",
-      employeeCode: payroll.employeeId.employeeCode,
-      employeeName: payroll.employeeId.fullName,
-      payslipPdfUrl: payroll.payslipPdfUrl,
-      payroll,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-
-// ===============================
-// PUBLISH PAYSLIP + SEND MAIL
-// ===============================
-exports.publishPayslip = async (req, res) => {
-  try {
-    const payroll = await Payroll.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        companyId: req.user.companyId,
+      role: {
+        $in: ["employee", "teamlead", "projectmanager", "hr"],
       },
-      {
-        status: "published",
-      },
-      {
-        new: true,
-      }
-    ).populate("employeeId", "employeeCode fullName email");
+    }).lean();
 
-    if (!payroll) {
-      return res.status(404).json({
-        success: false,
-        message: "Payroll not found",
+    const payrollEmployees = [];
+
+    let totalEarnings = 0;
+    let totalDeductions = 0;
+    let netPayroll = 0;
+
+    for (const employee of employees) {
+      const presentDays = await Attendance.countDocuments({
+        companyId,
+        employeeId: employee._id,
+        date: { $gte: start, $lte: end },
+        status: "present",
       });
+
+      const absentDays = totalWorkingDays - presentDays;
+
+      const basicSalary = Number(employee.basicSalary || employee.salary || 0);
+
+      const perDaySalary = basicSalary / totalWorkingDays;
+
+      const grossEarning = perDaySalary * presentDays;
+
+      const pfDeduction = grossEarning * 0.12;
+
+      const esiDeduction = grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
+
+      const totalDeduction = pfDeduction + esiDeduction;
+
+      const netSalary = grossEarning - totalDeduction;
+
+      const payrollData = {
+        totalWorkingDays,
+        presentDays,
+        absentDays,
+        basicSalary: roundAmount(basicSalary),
+        perDaySalary: roundAmount(perDaySalary),
+        grossEarning: roundAmount(grossEarning),
+        pfDeduction: roundAmount(pfDeduction),
+        esiDeduction: roundAmount(esiDeduction),
+        totalDeduction: roundAmount(totalDeduction),
+        netSalary: roundAmount(netSalary),
+      };
+
+      const payslipUrl = await generatePayslip({
+        employee,
+        payrollData,
+        month,
+        year,
+      });
+
+      payrollEmployees.push({
+        employeeId: employee._id,
+        employeeCode: employee.employeeCode,
+        employeeName: employee.fullName,
+        role: employee.role,
+
+        ...payrollData,
+
+        payslipUrl,
+      });
+
+      totalEarnings += payrollData.grossEarning;
+      totalDeductions += payrollData.totalDeduction;
+      netPayroll += payrollData.netSalary;
     }
 
-    const monthName = getMonthName(payroll.month, payroll.year);
-    const formattedMonth = `${monthName} ${payroll.year}`;
+    const payroll = await Payroll.create({
+      companyId,
+      month,
+      year,
+      payrollName: `${month}-${year} Payroll`,
+      period: `${start.toLocaleDateString("en-IN")} - ${end.toLocaleDateString(
+        "en-IN"
+      )}`,
+      totalEmployees: employees.length,
+      totalEarnings: roundAmount(totalEarnings),
+      totalDeductions: roundAmount(totalDeductions),
+      netPayroll: roundAmount(netPayroll),
+      employees: payrollEmployees,
+      processedBy: req.user.id,
+      status: "Completed",
+    });
 
-    if (payroll.employeeId?.email) {
-      await sendMail({
-        to: payroll.employeeId.email,
-        subject: `Payslip Published - ${formattedMonth}`,
-        html: payrollPayslipTemplate(
-          payroll.employeeId.fullName,
-          formattedMonth,
-          payroll.netSalary,
-          "Mounttown HRMS"
-        ),
-      });
-    }
-
-    res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: "Payslip published and email sent",
-      employeeCode: payroll.employeeId.employeeCode,
-      employeeName: payroll.employeeId.fullName,
-      payroll,
+      message: "Payroll processed successfully",
+      data: payroll,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Payroll processing failed",
+      error: error.message,
     });
   }
 };
 
-// ===============================
-// DOWNLOAD PAYSLIP
-// ===============================
-exports.downloadPayslip = async (req, res) => {
+exports.getPayrollDashboard = async (req, res) => {
   try {
+    const companyId = req.user.companyId;
+
+    const latestPayroll = await Payroll.findOne({ companyId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const totalEmployees = latestPayroll?.totalEmployees || 0;
+
+    const payrollOverview = await Payroll.find({ companyId })
+      .sort({ year: -1, month: -1 })
+      .limit(6)
+      .select("month year totalEarnings totalDeductions netPayroll")
+      .lean();
+
+    const recentPayrolls = await Payroll.find({ companyId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select(
+        "payrollName period totalEmployees totalEarnings totalDeductions netPayroll status"
+      )
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        dashboardCard: {
+          totalEmployees,
+          totalEarnings: latestPayroll?.totalEarnings || 0,
+          totalDeductions: latestPayroll?.totalDeductions || 0,
+          netPayroll: latestPayroll?.netPayroll || 0,
+        },
+
+        payrollOverview: payrollOverview.map((item) => ({
+          monthYear: `${item.month}/${item.year}`,
+          totalEarning: item.totalEarnings,
+          totalDeduction: item.totalDeductions,
+          netPayroll: item.netPayroll,
+        })),
+
+        recentPayrolls: recentPayrolls.map((item) => ({
+          payrollName: item.payrollName,
+          period: item.period,
+          employees: item.totalEmployees,
+          totalEarning: item.totalEarnings,
+          totalDeductions: item.totalDeductions,
+          netPayroll: item.netPayroll,
+          status: item.status,
+        })),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Payroll dashboard failed",
+      error: error.message,
+    });
+  }
+};
+
+exports.getEmployeePayslip = async (req, res) => {
+  try {
+    const { payrollId, employeeId } = req.params;
+
     const payroll = await Payroll.findOne({
-      _id: req.params.id,
+      _id: payrollId,
       companyId: req.user.companyId,
-    }).populate("employeeId", "employeeCode fullName email");
+      "employees.employeeId": employeeId,
+    });
 
     if (!payroll) {
       return res.status(404).json({
@@ -252,60 +224,19 @@ exports.downloadPayslip = async (req, res) => {
       });
     }
 
+    const employeePayslip = payroll.employees.find(
+      (item) => item.employeeId.toString() === employeeId
+    );
+
     res.status(200).json({
       success: true,
-      message: "Payslip ready to download",
-      employeeCode: payroll.employeeId.employeeCode,
-      employeeName: payroll.employeeId.fullName,
-      payslipPdfUrl: payroll.payslipPdfUrl,
-      payroll,
+      data: employeePayslip,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
-    });
-  }
-};
-
-// ===============================
-// GET ALL PAYROLLS
-// ===============================
-exports.getPayrolls = async (req, res) => {
-  try {
-    const filter = {
-      companyId: req.user.companyId,
-    };
-
-    if (req.query.employeeId) {
-      filter.employeeId = req.query.employeeId;
-    }
-
-    if (req.query.month) {
-      filter.month = Number(req.query.month);
-    }
-
-    if (req.query.year) {
-      filter.year = Number(req.query.year);
-    }
-
-    const payrolls = await Payroll.find(filter)
-      .populate("employeeId", "employeeCode fullName email salary")
-      .sort({
-        year: -1,
-        month: -1,
-        createdAt: -1,
-      });
-
-    res.status(200).json({
-      success: true,
-      count: payrolls.length,
-      payrolls,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
+      message: "Failed to fetch payslip",
+      error: error.message,
     });
   }
 };
