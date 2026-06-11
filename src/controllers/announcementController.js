@@ -2,52 +2,53 @@ const Announcement = require("../models/announcementsModel");
 
 exports.createAnnouncement = async (req, res) => {
   try {
+    const { title, description, targetRoles, priority } = req.body;
+
     const announcement = await Announcement.create({
       companyId: req.user.companyId,
-      title: req.body.title,
-      message: req.body.message,
-      audience: req.body.audience || "all",
+      title,
+      description,
+      targetRoles,
+      priority,
       createdBy: req.user.id,
-      status: req.body.status || "active",
     });
 
     res.status(201).json({
       success: true,
       message: "Announcement created successfully",
-      announcement,
+      data: announcement,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to create announcement",
+      error: error.message,
     });
   }
 };
 
 exports.getAnnouncements = async (req, res) => {
   try {
-    const filter = {
+    const role = req.user.role;
+
+    const announcements = await Announcement.find({
       companyId: req.user.companyId,
       status: "active",
-    };
+      $or: [
+        { targetRoles: { $size: 0 } },
+        { targetRoles: role },
+      ],
+    }).sort({ createdAt: -1 });
 
-    if (req.user.role && req.user.role !== "employer" && req.user.role !== "admin") {
-      filter.$or = [{ audience: "all" }, { audience: req.user.role }];
-    }
-
-    const announcements = await Announcement.find(filter)
-      .populate("createdBy", "name email role")
-      .sort({ createdAt: -1 });
-
-    res.json({
+    res.status(200).json({
       success: true,
-      count: announcements.length,
-      announcements,
+      data: announcements,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to fetch announcements",
+      error: error.message,
     });
   }
 };
@@ -59,12 +60,7 @@ exports.updateAnnouncement = async (req, res) => {
         _id: req.params.id,
         companyId: req.user.companyId,
       },
-      {
-        title: req.body.title,
-        message: req.body.message,
-        audience: req.body.audience,
-        status: req.body.status,
-      },
+      req.body,
       { new: true, runValidators: true }
     );
 
@@ -75,15 +71,16 @@ exports.updateAnnouncement = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Announcement updated successfully",
-      announcement,
+      data: announcement,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to update announcement",
+      error: error.message,
     });
   }
 };
@@ -102,14 +99,15 @@ exports.deleteAnnouncement = async (req, res) => {
       });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Announcement deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: "Failed to delete announcement",
+      error: error.message,
     });
   }
 };

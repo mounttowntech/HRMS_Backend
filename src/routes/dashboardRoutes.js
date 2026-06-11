@@ -1,44 +1,20 @@
-const router = require("express").Router();
-const c = require("../controllers/dashboardController");
+const express = require("express");
+const router = express.Router();
 
 const {
-  verifyToken,
-  allowRoles,
-} = require("../middleware/authMiddleware");
+  getAdminDashboard,
+  getHRDashboard,
+  getEmployeeDashboard,
+  getTeamLeadDashboard,
+  getProjectManagerDashboard,
+} = require("../controllers/dashboardController");
 
-router.get(
-  "/admin",
-  verifyToken,
-  allowRoles("admin", "employer"),
-  c.adminDashboard
-);
+const { verifyToken } = require("../middleware/authMiddleware");
 
-router.get(
-  "/hr",
-  verifyToken,
-  allowRoles("hr", "admin", "employer"),
-  c.hrDashboard
-);
-
-router.get(
-  "/teamlead",
-  verifyToken,
-  allowRoles("teamlead", "admin", "employer"),
-  c.teamLeadDashboard
-);
-
-router.get(
-  "/project-manager",
-  verifyToken,
-  allowRoles("projectmanager", "admin", "employer"),
-  c.projectManagerDashboard
-);
-
-router.get(
-  "/employee",
-  verifyToken,
-  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
-  c.employeeDashboard
-);
+router.get("/admin", verifyToken, getAdminDashboard);
+router.get("/hr", verifyToken, getHRDashboard);
+router.get("/employee", verifyToken, getEmployeeDashboard);
+router.get("/teamlead", verifyToken, getTeamLeadDashboard);
+router.get("/project-manager", verifyToken, getProjectManagerDashboard);
 
 module.exports = router;

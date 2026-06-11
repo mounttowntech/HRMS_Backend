@@ -1,16 +1,9 @@
-const router = require("express").Router();
-const c = require("../controllers/reportController");
+const express = require("express");
+const router = express.Router();
 
-const {
-  verifyToken,
-  allowRoles,
-} = require("../middleware/authMiddleware");
+const { getReportsSummary } = require("../controllers/reportController");
+const { verifyToken } = require("../middleware/authMiddleware");
 
-router.get(
-  "/summary",
-  verifyToken,
-  allowRoles("admin", "hr", "projectmanager", "teamlead"),
-  c.summaryReport
-);
+router.get("/summary", verifyToken, getReportsSummary);
 
 module.exports = router;

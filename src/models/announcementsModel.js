@@ -7,27 +7,49 @@ const announcementSchema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+
     title: {
       type: String,
       required: true,
+      trim: true,
     },
-    message: {
+
+    description: {
       type: String,
       required: true,
+      trim: true,
     },
-    audience: {
+
+    targetRoles: [
+      {
+        type: String,
+        enum: [
+          "employer",
+          "admin",
+          "hr",
+          "employee",
+          "teamlead",
+          "projectmanager",
+        ],
+      },
+    ],
+
+    priority: {
       type: String,
-      enum: ["all", "employer", "admin", "hr", "teamlead", "projectmanager", "employee"],
-      default: "all",
+      enum: ["low", "medium", "high"],
+      default: "medium",
     },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
+
     status: {
       type: String,
       enum: ["active", "inactive"],
       default: "active",
+    },
+
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
     },
   },
   { timestamps: true }
