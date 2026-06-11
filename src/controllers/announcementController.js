@@ -1,16 +1,25 @@
 const Announcement = require("../models/announcementsModel");
 
+// CREATE ANNOUNCEMENT
 exports.createAnnouncement = async (req, res) => {
   try {
     const { title, description, targetRoles, priority } = req.body;
+
+    if (!title || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Title and description are required",
+      });
+    }
 
     const announcement = await Announcement.create({
       companyId: req.user.companyId,
       title,
       description,
-      targetRoles,
-      priority,
-      createdBy: req.user.id,
+      targetRoles: targetRoles || [],
+      priority: priority || "medium",
+      status: "active",
+      createdBy: req.user.id || req.user.userId,
     });
 
     res.status(201).json({
@@ -27,6 +36,7 @@ exports.createAnnouncement = async (req, res) => {
   }
 };
 
+// GET ROLE BASED ANNOUNCEMENTS
 exports.getAnnouncements = async (req, res) => {
   try {
     const role = req.user.role;
@@ -42,6 +52,7 @@ exports.getAnnouncements = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      count: announcements.length,
       data: announcements,
     });
   } catch (error) {
@@ -53,6 +64,28 @@ exports.getAnnouncements = async (req, res) => {
   }
 };
 
+// GET ALL ANNOUNCEMENTS
+exports.getAllAnnouncements = async (req, res) => {
+  try {
+    const announcements = await Announcement.find({
+      companyId: req.user.companyId,
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: announcements.length,
+      data: announcements,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all announcements",
+      error: error.message,
+    });
+  }
+};
+
+// UPDATE ANNOUNCEMENT
 exports.updateAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findOneAndUpdate(
@@ -61,7 +94,10 @@ exports.updateAnnouncement = async (req, res) => {
         companyId: req.user.companyId,
       },
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
     if (!announcement) {
@@ -85,6 +121,7 @@ exports.updateAnnouncement = async (req, res) => {
   }
 };
 
+// DELETE ANNOUNCEMENT
 exports.deleteAnnouncement = async (req, res) => {
   try {
     const announcement = await Announcement.findOneAndDelete({

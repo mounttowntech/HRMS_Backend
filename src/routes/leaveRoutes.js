@@ -2,11 +2,13 @@ const router = require("express").Router();
 
 const c = require("../controllers/leaveController");
 const leaveUpload = require("../middleware/leaveUpload");
+
 const {
   verifyToken,
   allowRoles,
 } = require("../middleware/authMiddleware");
 
+// APPLY LEAVE WITH DOCUMENT UPLOAD
 router.post(
   "/apply",
   verifyToken,
@@ -15,20 +17,7 @@ router.post(
   c.applyLeave
 );
 
-router.patch(
-  "/:id/manager-approval",
-  verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin", "hr"),
-  c.managerApproval
-);
-
-router.patch(
-  "/:id/hr-approval",
-  verifyToken,
-  allowRoles("hr", "admin"),
-  c.hrApproval
-);
-
+// GET ALL / ROLE BASED LEAVES
 router.get(
   "/all",
   verifyToken,
@@ -36,12 +25,31 @@ router.get(
   c.getLeaves
 );
 
+// GET MY LEAVES
 router.get(
   "/my-leaves",
   verifyToken,
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.getMyLeaves
 );
+
+// MANAGER APPROVAL
+router.patch(
+  "/:id/manager-approval",
+  verifyToken,
+  allowRoles("teamlead", "projectmanager", "admin", "hr"),
+  c.managerApproval
+);
+
+// HR APPROVAL
+router.patch(
+  "/:id/hr-approval",
+  verifyToken,
+  allowRoles("hr", "admin"),
+  c.hrApproval
+);
+
+// UPDATE LEAVE WITH DOCUMENT UPLOAD
 router.put(
   "/:id",
   verifyToken,
@@ -50,10 +58,12 @@ router.put(
   c.updateLeave
 );
 
+// DELETE LEAVE
 router.delete(
   "/:id",
   verifyToken,
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.deleteLeave
 );
+
 module.exports = router;
