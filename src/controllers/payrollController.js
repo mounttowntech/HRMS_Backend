@@ -145,7 +145,84 @@ exports.processPayroll = async (req, res) => {
     });
   }
 };
+// GET ALL PAYROLLS
+exports.getAllPayrolls = async (req, res) => {
+  try {
+    const payrolls = await Payroll.find({
+      companyId: req.user.companyId,
+    })
+      .sort({ year: -1, month: -1, createdAt: -1 })
+      .select("-employees");
 
+    res.status(200).json({
+      success: true,
+      count: payrolls.length,
+      data: payrolls,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch payrolls",
+      error: error.message,
+    });
+  }
+};
+
+// GET SINGLE PAYROLL
+exports.getPayrollById = async (req, res) => {
+  try {
+    const payroll = await Payroll.findOne({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    }).populate("employees.employeeId", "fullName employeeCode email role");
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: "Payroll not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: payroll,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch payroll",
+      error: error.message,
+    });
+  }
+};
+
+// DELETE PAYROLL
+exports.deletePayroll = async (req, res) => {
+  try {
+    const payroll = await Payroll.findOneAndDelete({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: "Payroll not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Payroll deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete payroll",
+      error: error.message,
+    });
+  }
+};
 exports.getPayrollDashboard = async (req, res) => {
   try {
     const companyId = req.user.companyId;
