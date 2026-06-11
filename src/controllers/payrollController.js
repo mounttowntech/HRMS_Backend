@@ -148,22 +148,42 @@ exports.processPayroll = async (req, res) => {
 // GET ALL PAYROLLS
 exports.getAllPayrolls = async (req, res) => {
   try {
-    const payrolls = await Payroll.find({
+    const filter = {
       companyId: req.user.companyId,
-    })
-      .sort({ year: -1, month: -1, createdAt: -1 })
-      .select("-employees");
+    };
+
+    if (req.query.employeeId) {
+      filter["employees.employeeId"] = req.query.employeeId;
+    }
+
+    if (req.query.month) {
+      filter.month = Number(req.query.month);
+    }
+
+    if (req.query.year) {
+      filter.year = Number(req.query.year);
+    }
+
+    const payrolls = await Payroll.find(filter)
+      .populate(
+        "employees.employeeId",
+        "employeeCode fullName email salary role"
+      )
+      .sort({
+        year: -1,
+        month: -1,
+        createdAt: -1,
+      });
 
     res.status(200).json({
       success: true,
       count: payrolls.length,
-      data: payrolls,
+      payrolls,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch payrolls",
-      error: error.message,
+      message: error.message,
     });
   }
 };
