@@ -25,7 +25,7 @@ const verifyToken = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = {
-      id: decoded.id,
+      id: decoded.id || decoded.userId,
       role: decoded.role,
       email: decoded.email,
       companyId: decoded.companyId,

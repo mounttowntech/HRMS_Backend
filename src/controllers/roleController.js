@@ -1,5 +1,5 @@
 const RolePermission = require("../models/RolePermission");
-
+const Company = require("../models/Company");
 const defaultRolePermissions = [
   {
     roleName: "admin",
@@ -98,10 +98,10 @@ const defaultRolePermissions = [
 // CREATE ROLE
 exports.createRole = async (req, res) => {
   try {
-    const { roleName, permissions } = req.body;
-    const companyId = req.user.companyId;
+    const { roleName, permissions,companyId  } = req.body;
+    const userCompanyId = req.user.companyId;
 
-    if (!companyId) {
+    if (!userCompanyId) {
       return res.status(400).json({
         success: false,
         message: "companyId missing in token",
@@ -133,10 +133,13 @@ exports.createRole = async (req, res) => {
       permissions: permissions || {},
     });
 
+    const populatedRole = await RolePermission.findById(role._id)
+      .populate("companyId", "companyName email");
+
     return res.status(201).json({
       success: true,
       message: "Role created successfully",
-      role,
+      role: populatedRole,
     });
   } catch (error) {
     return res.status(500).json({
@@ -207,7 +210,7 @@ exports.getRoles = async (req, res) => {
       });
     }
 
-    let roles = await RolePermission.find({ companyId });
+    let roles = await RolePermission.find();
 
     if (roles.length === 0) {
       const insertData = defaultRolePermissions.map((role) => ({
@@ -268,35 +271,65 @@ exports.getRoleById = async (req, res) => {
 // UPDATE ROLE
 exports.updateRole = async (req, res) => {
   try {
-    const { roleName, permissions } = req.body;
-    const companyId = req.user.companyId;
+    const { roleName, permissions, companyId } = req.body || {};
+    const userCompanyId = req.user?.companyId;
 
-    const role = await RolePermission.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        companyId,
-      },
-      {
-        ...(roleName && { roleName }),
-        ...(permissions && { permissions }),
-      },
-      {
-        new: true,
-        runValidators: true,
-      }
-    );
+    const roleById = await RolePermission.findById(req.params.id);
 
-    if (!role) {
+    if (!roleById) {
       return res.status(404).json({
         success: false,
-        message: "Role not found",
+        message: "Wrong role id. No role found with this id.",
+        roleId: req.params.id,
       });
     }
+
+    // if (roleById.companyId.toString() !== userCompanyId.toString()) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Role companyId and token companyId not matching",
+    //     roleCompanyId: roleById.companyId,
+    //     tokenCompanyId: companyId,
+    //   });
+    // }
+
+    const company = await Company.findById(companyId);
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: "Company not found",
+        companyId,
+      });
+    }
+
+
+    if (roleName) roleById.roleName = roleName;
+
+    if (permissions) {
+      roleById.permissions = {
+        ...roleById.permissions,
+        ...permissions,
+      };
+    }
+
+    if (companyId) roleById.companyId = companyId;
+
+    await roleById.save();
 
     return res.status(200).json({
       success: true,
       message: "Role updated successfully",
-      role,
+      role: {
+        _id: roleById._id,
+        roleName: roleById.roleName,
+        companyId: company._id,
+        companyName: company.companyName,
+        companyEmail: company.email,
+        permissions: roleById.permissions,
+        createdAt: roleById.createdAt,
+        updatedAt: roleById.updatedAt,
+      },
     });
   } catch (error) {
     return res.status(500).json({
@@ -309,12 +342,12 @@ exports.updateRole = async (req, res) => {
 // DELETE ROLE
 exports.deleteRole = async (req, res) => {
   try {
-    const companyId = req.user.companyId;
+    const roleId = req.params.id;
 
-    const role = await RolePermission.findOneAndDelete({
-      _id: req.params.id,
-      companyId,
-    });
+    const role =
+      await RolePermission.findById(
+        roleId
+      );
 
     if (!role) {
       return res.status(404).json({
@@ -322,6 +355,10 @@ exports.deleteRole = async (req, res) => {
         message: "Role not found",
       });
     }
+
+    await RolePermission.findByIdAndDelete(
+      roleId
+    );
 
     return res.status(200).json({
       success: true,

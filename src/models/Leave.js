@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+
 const schema = new mongoose.Schema(
   {
     companyId: {
@@ -6,21 +7,54 @@ const schema = new mongoose.Schema(
       ref: "Company",
       required: true,
     },
+
     employeeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Employee",
       required: true,
     },
+
     leaveType: {
       type: String,
       enum: ["paid", "sick", "casual"],
       required: true,
     },
-    fromDate: { type: Date, required: true },
-    toDate: { type: Date, required: true },
-    days: { type: Number, required: true },
+
+    fromDate: {
+      type: Date,
+      required: true,
+    },
+
+    toDate: {
+      type: Date,
+      required: true,
+    },
+
+    days: {
+      type: Number,
+      required: true,
+    },
+
     reason: String,
-    balanceAvailable: { type: Boolean, default: true },
+
+    documents: [
+      {
+        documentType: {
+          type: String,
+          enum: ["medical_certificate", "marriage_invitation", "other"],
+          default: "other",
+        },
+        fileName: String,
+        fileUrl: String,
+        mimeType: String,
+      },
+    ],
+
+    balanceAvailable: {
+      type: Boolean,
+      default: true,
+    },
+
     status: {
       type: String,
       enum: [
@@ -33,8 +67,12 @@ const schema = new mongoose.Schema(
       ],
       default: "pending_manager",
     },
+
     managerApproval: {
-      approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
+      approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Employee",
+      },
       status: {
         type: String,
         enum: ["pending", "approved", "rejected"],
@@ -42,8 +80,12 @@ const schema = new mongoose.Schema(
       },
       remarks: String,
     },
+
     hrApproval: {
-      approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
+      approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Employee",
+      },
       status: {
         type: String,
         enum: ["pending", "approved", "rejected"],
@@ -52,6 +94,7 @@ const schema = new mongoose.Schema(
       remarks: String,
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
 module.exports = mongoose.model("Leave", schema);

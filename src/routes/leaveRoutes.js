@@ -1,23 +1,59 @@
 const router = require("express").Router();
+
 const c = require("../controllers/leaveController");
-const { verifyToken, allowRoles } = require("../middleware/authMiddleware");
-router.post("/apply", verifyToken, c.applyLeave);
+const leaveUpload = require("../middleware/leaveUpload");
+const {
+  verifyToken,
+  allowRoles,
+} = require("../middleware/authMiddleware");
+
+router.post(
+  "/apply",
+  verifyToken,
+  allowRoles("teamlead", "projectmanager", "admin", "hr", "employee"),
+  leaveUpload.array("documents", 5),
+  c.applyLeave
+);
+
 router.patch(
   "/:id/manager-approval",
   verifyToken,
-  allowRoles("teamlead", "projectmanager", "admin","hr"),
-  c.managerApproval,
+  allowRoles("teamlead", "projectmanager", "admin", "hr"),
+  c.managerApproval
 );
+
 router.patch(
   "/:id/hr-approval",
   verifyToken,
   allowRoles("hr", "admin"),
-  c.hrApproval,
+  c.hrApproval
 );
+
 router.get(
   "/all",
   verifyToken,
-  allowRoles("employer", "admin", "hr", "teamlead", "projectmanager"),
-  c.getLeaves,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.getLeaves
+);
+
+router.get(
+  "/my-leaves",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.getMyLeaves
+);
+router.put(
+  "/:id",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  leaveUpload.array("documents", 5),
+  c.updateLeave
+);
+
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.deleteLeave
 );
 module.exports = router;

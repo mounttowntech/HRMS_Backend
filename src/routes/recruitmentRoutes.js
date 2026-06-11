@@ -48,5 +48,60 @@ router.post(
   allowRoles("employer", "hr", "admin"),
   recruitmentController.createEmployeeFromCandidate
 );
+router.get(
+  "/job-posts",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAllJobPosts
+);
+
+router.get(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getJobPostById
+);
+
+router.put(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.updateJobPostById
+);
+
+router.delete(
+  "/job-posts/:jobPostId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.deleteJobPostById
+);
+router.get(
+  "/applied-candidates",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAppliedCandidates
+);
+
+router.get(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.getAppliedCandidateById
+);
+router.put(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.updateAppliedCandidateById
+);
+router.delete(
+  "/applied-candidates/:candidateId",
+  verifyToken,
+  allowRoles("hr", "admin", "employer"),
+  recruitmentController.deleteAppliedCandidateById
+);
+
+
+
 
 module.exports = router;

@@ -8,18 +8,31 @@ const permissionSchema = new mongoose.Schema(
       required: true,
     },
 
-    roleName: {
-      type: String,
-      enum: [
+   roleName: {
+  type: String,
+  validate: {
+    validator: function (value) {
+      const defaultRoles = [
         "employer",
         "admin",
         "hr",
         "employee",
         "teamlead",
         "projectmanager",
-      ],
-      required: true,
+      ];
+
+      return (
+        defaultRoles.includes(
+          value.toLowerCase()
+        ) ||
+        value.trim().length > 0
+      );
     },
+    message:
+      "Invalid role name",
+  },
+  required: true,
+},
 
     permissions: {
       dashboard: [{ type: String }],
