@@ -8,7 +8,6 @@ const {
   allowRoles,
 } = require("../middleware/authMiddleware");
 
-// APPLY LEAVE WITH DOCUMENT UPLOAD
 router.post(
   "/apply",
   verifyToken,
@@ -17,23 +16,6 @@ router.post(
   c.applyLeave
 );
 
-// GET ALL / ROLE BASED LEAVES
-router.get(
-  "/all",
-  verifyToken,
-  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
-  c.getLeaves
-);
-
-// GET MY LEAVES
-router.get(
-  "/my-leaves",
-  verifyToken,
-  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
-  c.getMyLeaves
-);
-
-// MANAGER APPROVAL
 router.patch(
   "/:id/manager-approval",
   verifyToken,
@@ -41,7 +23,6 @@ router.patch(
   c.managerApproval
 );
 
-// HR APPROVAL
 router.patch(
   "/:id/hr-approval",
   verifyToken,
@@ -49,7 +30,20 @@ router.patch(
   c.hrApproval
 );
 
-// UPDATE LEAVE WITH DOCUMENT UPLOAD
+router.get(
+  "/all",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.getLeaves
+);
+
+router.get(
+  "/my-leaves",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
+  c.getMyLeaves
+);
+
 router.put(
   "/:id",
   verifyToken,
@@ -58,7 +52,6 @@ router.put(
   c.updateLeave
 );
 
-// DELETE LEAVE
 router.delete(
   "/:id",
   verifyToken,
