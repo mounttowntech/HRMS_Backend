@@ -9,7 +9,7 @@ const {
   getEmployeePayslip,
   downloadEmployeePayslip,
   sendEmployeePayslipMail,
-  getMyPayslip,
+  getMyPayslips,
   deletePayroll,
 } = require("../controllers/payrollController");
 
@@ -41,13 +41,8 @@ router.get(
 router.get(
   "/my-payslip",
   verifyToken,
-  allowRoles(
-    "employee",
-    "teamlead",
-    "projectmanager",
-    "hr"
-  ),
-  getMyPayslip
+  allowRoles("employee", "teamlead", "projectmanager", "hr"),
+  getMyPayslips
 );
 router.get(
   "/:payrollId/employee/:employeeId/payslip",
