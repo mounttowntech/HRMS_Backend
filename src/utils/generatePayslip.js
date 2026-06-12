@@ -3,7 +3,10 @@ const path = require("path");
 const PDFDocument = require("pdfkit");
 
 const formatAmount = (amount) => {
-  return Number(amount || 0).toLocaleString("en-IN");
+  return Number(amount || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
 const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
@@ -23,15 +26,18 @@ const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
 
   doc.pipe(fs.createWriteStream(filePath));
 
-  doc.fontSize(16).font("Helvetica-Bold").text(
-    "Mounttown Technology Private Limited",
-    { align: "center" }
-  );
+  // COMPANY HEADER
+  doc
+    .fontSize(16)
+    .font("Helvetica-Bold")
+    .text("Mounttown Technology Private Limited", { align: "center" });
 
-  doc.fontSize(9).font("Helvetica").text(
-    "4A, 3rd Street, Co-operative colony, Mettupalayam 641301.",
-    { align: "center" }
-  );
+  doc
+    .fontSize(9)
+    .font("Helvetica")
+    .text("4A, 3rd Street, Co-operative colony, Mettupalayam 641301.", {
+      align: "center",
+    });
 
   doc.text("www.themounttown.com | hr@themounttown.com", {
     align: "center",
@@ -54,20 +60,21 @@ const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
 
   doc.moveDown();
 
+  // EMPLOYEE DETAILS
   const startX = 35;
-  let y = doc.y;
+  let y = doc.y + 5;
   const rowHeight = 22;
 
   const drawInfoRow = (leftLabel, leftValue, rightLabel, rightValue) => {
     doc.fontSize(9).font("Helvetica");
 
-    doc.text(leftLabel, startX, y);
+    doc.text(leftLabel, startX, y, { width: 110 });
     doc.text(":", startX + 120, y);
-    doc.text(leftValue || "", startX + 130, y);
+    doc.text(String(leftValue || ""), startX + 135, y, { width: 190 });
 
-    doc.text(rightLabel, startX + 300, y);
-    doc.text(":", startX + 420, y);
-    doc.text(rightValue || "", startX + 430, y);
+    doc.text(rightLabel, startX + 330, y, { width: 110 });
+    doc.text(":", startX + 455, y);
+    doc.text(String(rightValue || ""), startX + 470, y, { width: 100 });
 
     y += rowHeight;
   };
@@ -95,72 +102,129 @@ const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
     payrollData.shiftName
   );
 
-  y += 8;
+  y += 10;
 
+  // TABLE CONFIG
   const tableX = 35;
   const c1 = 170;
-  const c2 = 155;
-  const c3 = 155;
-  const c4 = 45;
+  const c2 = 120;
+  const c3 = 160;
+  const c4 = 110;
+  const tableWidth = c1 + c2 + c3 + c4;
 
   const drawCell = (x, y, w, h, text, bold = false, align = "left") => {
     doc.rect(x, y, w, h).stroke();
-    doc.fontSize(9).font(bold ? "Helvetica-Bold" : "Helvetica");
-    doc.text(text || "", x + 5, y + 7, {
+
+    doc.fontSize(8.8).font(bold ? "Helvetica-Bold" : "Helvetica");
+
+    doc.text(String(text || ""), x + 5, y + 7, {
       width: w - 10,
       align,
+      lineBreak: false,
     });
   };
 
-  drawCell(tableX, y, c1, rowHeight, "Earnings", true);
-  drawCell(tableX + c1, y, c2, rowHeight, "Amount", true);
-  drawCell(tableX + c1 + c2, y, c3, rowHeight, "Deductions", true);
-  drawCell(tableX + c1 + c2 + c3, y, c4, rowHeight, "Amount", true);
+  const drawHeaderCell = (x, y, w, h, text) => {
+    doc.rect(x, y, w, h).fillAndStroke("#d9d9d9", "#000000");
+
+    doc.fillColor("#000000");
+    doc.fontSize(9).font("Helvetica-Bold");
+
+    doc.text(text, x + 5, y + 7, {
+      width: w - 10,
+      align: "left",
+      lineBreak: false,
+    });
+  };
+
+  // TABLE HEADER
+  drawHeaderCell(tableX, y, c1, rowHeight, "Earnings");
+  drawHeaderCell(tableX + c1, y, c2, rowHeight, "Amount");
+  drawHeaderCell(tableX + c1 + c2, y, c3, rowHeight, "Deductions");
+  drawHeaderCell(tableX + c1 + c2 + c3, y, c4, rowHeight, "Amount");
 
   y += rowHeight;
 
+  const shiftLabel = payrollData.shiftName?.toLowerCase().includes("night")
+    ? "Night Shift Allowance"
+    : "Day Shift Allowance";
+
   const rows = [
-    ["Basic Salary", payrollData.basicSalary, "PF & ESI", payrollData.totalDeduction],
-    ["House Rent Allowance (HRA)", payrollData.hra, "", ""],
     [
-      payrollData.shiftName?.toLowerCase().includes("night")
-        ? "Night Shift Allowance"
-        : "Day Shift Allowance",
-      payrollData.shiftAllowance,
+      "Basic Salary",
+      formatAmount(payrollData.basicSalary),
+      "PF & ESI",
+      formatAmount(payrollData.totalDeduction),
+    ],
+    ["House Rent Allowance (HRA)", formatAmount(payrollData.hra), "", ""],
+    [shiftLabel, formatAmount(payrollData.shiftAllowance), "", ""],
+    ["Medical Allowance", formatAmount(payrollData.medicalAllowance), "", ""],
+    [
+      "Conveyance Allowance",
+      formatAmount(payrollData.conveyanceAllowance),
       "",
       "",
     ],
-    ["Medical Allowance", payrollData.medicalAllowance, "", ""],
-    ["Conveyance Allowance", payrollData.conveyanceAllowance, "", ""],
-    ["Other Allowance", payrollData.otherAllowance, "", ""],
+    ["Other Allowance", formatAmount(payrollData.otherAllowance), "", ""],
   ];
 
   rows.forEach((row) => {
     drawCell(tableX, y, c1, rowHeight, row[0]);
-    drawCell(tableX + c1, y, c2, rowHeight, formatAmount(row[1]), false, "right");
+    drawCell(tableX + c1, y, c2, rowHeight, row[1], false, "right");
     drawCell(tableX + c1 + c2, y, c3, rowHeight, row[2]);
-    drawCell(
-      tableX + c1 + c2 + c3,
-      y,
-      c4,
-      rowHeight,
-      row[3] ? formatAmount(row[3]) : "",
-      false,
-      "right"
-    );
+    drawCell(tableX + c1 + c2 + c3, y, c4, rowHeight, row[3], false, "right");
+
     y += rowHeight;
   });
 
+  // TOTAL EARNINGS ROW
   drawCell(tableX, y, c1, rowHeight, "Total Earnings", true);
-  drawCell(tableX + c1, y, c2, rowHeight, formatAmount(payrollData.grossEarning), true, "right");
+  drawCell(
+    tableX + c1,
+    y,
+    c2,
+    rowHeight,
+    formatAmount(payrollData.grossEarning),
+    true,
+    "right"
+  );
+
   drawCell(tableX + c1 + c2, y, c3, rowHeight, "Total Deductions", true);
-  drawCell(tableX + c1 + c2 + c3, y, c4, rowHeight, formatAmount(payrollData.totalDeduction), true, "right");
+  drawCell(
+    tableX + c1 + c2 + c3,
+    y,
+    c4,
+    rowHeight,
+    formatAmount(payrollData.totalDeduction),
+    true,
+    "right"
+  );
 
   y += rowHeight;
 
+  // NET PAY ROW
   drawCell(tableX, y, c1 + c2, rowHeight, "");
   drawCell(tableX + c1 + c2, y, c3, rowHeight, "Net Pay", true);
-  drawCell(tableX + c1 + c2 + c3, y, c4, rowHeight, formatAmount(payrollData.netSalary), true, "right");
+  drawCell(
+    tableX + c1 + c2 + c3,
+    y,
+    c4,
+    rowHeight,
+    formatAmount(payrollData.netSalary),
+    true,
+    "right"
+  );
+
+  y += rowHeight + 10;
+
+  // FOOTER AMOUNT IN WORDS OPTIONAL
+  doc
+    .fontSize(8)
+    .font("Helvetica")
+    .text("This is a system generated payslip.", tableX, y, {
+      width: tableWidth,
+      align: "center",
+    });
 
   doc.end();
 

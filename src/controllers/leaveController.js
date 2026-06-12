@@ -9,13 +9,14 @@ const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
 const Notification = require("../models/notificationModel");
 const User = require("../models/User");
 
-// CREATE HR ANNOUNCEMENT NOTIFICATION
-const createHRNotification = async ({
-  companyId,
-  title,
-  description,
-  createdBy,
-}) => {
+const {
+  sendNotificationToRoles,
+  sendNotificationToUser,
+} = require("../utils/notificationHelper");
+
+const getUserId = (req) => req.user?.userId || req.user?.id;
+
+const createHRAnnouncement = async ({ companyId, title, description, createdBy }) => {
   try {
     await Announcement.create({
       companyId,
@@ -27,14 +28,14 @@ const createHRNotification = async ({
       createdBy,
     });
   } catch (error) {
-    console.log("HR NOTIFICATION ERROR:", error.message);
+    console.log("HR ANNOUNCEMENT ERROR:", error.message);
   }
 };
 
 // APPLY LEAVE
 exports.applyLeave = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     if (!userId) {
       return res.status(401).json({
@@ -97,12 +98,8 @@ console.log("balance leave is :", {
         documents,
         balanceAvailable: false,
         status: "balance_rejected",
-        managerApproval: {
-          status: "pending",
-        },
-        hrApproval: {
-          status: "pending",
-        },
+        managerApproval: { status: "pending" },
+        hrApproval: { status: "pending" },
       });
 
       return res.status(200).json({
@@ -125,19 +122,26 @@ console.log("balance leave is :", {
       documents,
       balanceAvailable: true,
       status: "pending_manager",
-      managerApproval: {
-        status: "pending",
-      },
-      hrApproval: {
-        status: "pending",
-      },
+      managerApproval: { status: "pending" },
+      hrApproval: { status: "pending" },
     });
 
-    await createHRNotification({
+    await createHRAnnouncement({
       companyId: req.user.companyId,
       title: "New Leave Request",
       description: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
-      createdBy: req.user.id || req.user.userId,
+      createdBy: userId,
+    });
+
+    await sendNotificationToRoles({
+      companyId: req.user.companyId,
+      senderId: userId,
+      roles: ["teamlead", "projectmanager", "hr", "admin"],
+      title: "New Leave Request",
+      message: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
+      type: "leave_request",
+      referenceId: leave._id,
+      referenceModel: "Leave",
     });
 
     res.status(201).json({
@@ -147,11 +151,7 @@ console.log("balance leave is :", {
     });
   } catch (error) {
     console.log("APPLY LEAVE ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -182,16 +182,46 @@ exports.managerApproval = async (req, res) => {
 
     await leave.save();
 
-    if (approved) {
-      const emp = await Employee.findById(leave.employeeId);
+    const emp = await Employee.findById(leave.employeeId);
 
-      await createHRNotification({
+    if (emp?.userId) {
+      await sendNotificationToUser({
+        companyId: req.user.companyId,
+        senderId: getUserId(req),
+        receiverId: emp.userId,
+        title: approved
+          ? "Leave Approved by Manager"
+          : "Leave Rejected by Manager",
+        message: approved
+          ? "Your leave request has been approved by manager and sent to HR."
+          : "Your leave request has been rejected by manager.",
+        type: approved ? "leave_approved" : "leave_rejected",
+        referenceId: leave._id,
+        referenceModel: "Leave",
+      });
+    }
+
+    if (approved) {
+      await createHRAnnouncement({
         companyId: req.user.companyId,
         title: "Leave Waiting for HR Approval",
         description: `${
           emp?.fullName || "Employee"
         } leave request is approved by manager and waiting for HR approval.`,
-        createdBy: req.user.id || req.user.userId,
+        createdBy: getUserId(req),
+      });
+
+      await sendNotificationToRoles({
+        companyId: req.user.companyId,
+        senderId: getUserId(req),
+        roles: ["hr", "admin"],
+        title: "Leave Waiting for HR Approval",
+        message: `${
+          emp?.fullName || "Employee"
+        } leave request is approved by manager and waiting for HR approval.`,
+        type: "leave_request",
+        referenceId: leave._id,
+        referenceModel: "Leave",
       });
     }
 
@@ -204,11 +234,7 @@ exports.managerApproval = async (req, res) => {
     });
   } catch (error) {
     console.log("MANAGER APPROVAL ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -230,7 +256,7 @@ exports.hrApproval = async (req, res) => {
     const approved = req.body.approved === true;
 
     const loggedEmployee = await Employee.findOne({
-      userId: req.user?.userId || req.user?.id,
+      userId: getUserId(req),
       companyId: req.user.companyId,
     });
 
@@ -262,10 +288,7 @@ exports.hrApproval = async (req, res) => {
             [`leaveBalance.${leave.leaveType}`]: updatedBalance,
           },
         },
-        {
-          new: true,
-          runValidators: false,
-        }
+        { new: true, runValidators: false }
       );
 
       for (
@@ -288,15 +311,27 @@ exports.hrApproval = async (req, res) => {
             date: day,
             status: "leave",
           },
-          {
-            upsert: true,
-            new: true,
-          }
+          { upsert: true, new: true }
         );
       }
     }
 
     await leave.save();
+
+    if (emp?.userId) {
+      await sendNotificationToUser({
+        companyId: req.user.companyId,
+        senderId: getUserId(req),
+        receiverId: emp.userId,
+        title: approved ? "Leave Approved" : "Leave Rejected",
+        message: approved
+          ? "Your leave request has been approved by HR."
+          : "Your leave request has been rejected by HR.",
+        type: approved ? "leave_approved" : "leave_rejected",
+        referenceId: leave._id,
+        referenceModel: "Leave",
+      });
+    }
 
     const html = leaveApprovalTemplate(
       emp.fullName,
@@ -322,18 +357,14 @@ exports.hrApproval = async (req, res) => {
     });
   } catch (error) {
     console.log("HR APPROVAL ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // GET LEAVES ROLE BASED
 exports.getLeaves = async (req, res) => {
   try {
-    const loggedInUserId = req.user?.userId || req.user?.id;
+    const loggedInUserId = getUserId(req);
     const role = req.user.role;
 
     let filter = {
@@ -417,18 +448,14 @@ exports.getLeaves = async (req, res) => {
     });
   } catch (error) {
     console.log("GET LEAVES ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // GET MY LEAVES
 exports.getMyLeaves = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const emp = await Employee.findOne({
       userId,
@@ -459,18 +486,14 @@ exports.getMyLeaves = async (req, res) => {
     });
   } catch (error) {
     console.log("GET MY LEAVES ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // UPDATE LEAVE
 exports.updateLeave = async (req, res) => {
   try {
-    const loggedInUserId = req.user?.userId || req.user?.id;
+    const loggedInUserId = getUserId(req);
     const role = req.user.role;
 
     const leave = await Leave.findOne({
@@ -550,13 +573,26 @@ exports.updateLeave = async (req, res) => {
         if (status === "approved") {
           const emp = await Employee.findById(leave.employeeId);
 
-          await createHRNotification({
+          await createHRAnnouncement({
             companyId: req.user.companyId,
             title: "Leave Waiting for HR Approval",
             description: `${
               emp?.fullName || "Employee"
             } leave request is approved by manager and waiting for HR approval.`,
-            createdBy: req.user.id || req.user.userId,
+            createdBy: getUserId(req),
+          });
+
+          await sendNotificationToRoles({
+            companyId: req.user.companyId,
+            senderId: getUserId(req),
+            roles: ["hr", "admin"],
+            title: "Leave Waiting for HR Approval",
+            message: `${
+              emp?.fullName || "Employee"
+            } leave request is waiting for HR approval.`,
+            type: "leave_request",
+            referenceId: leave._id,
+            referenceModel: "Leave",
           });
         }
       }
@@ -572,6 +608,25 @@ exports.updateLeave = async (req, res) => {
       }
 
       await leave.save();
+
+      const emp = await Employee.findById(leave.employeeId);
+
+      if (emp?.userId) {
+        await sendNotificationToUser({
+          companyId: req.user.companyId,
+          senderId: getUserId(req),
+          receiverId: emp.userId,
+          title:
+            status === "approved" ? "Leave Approved" : "Leave Rejected",
+          message:
+            status === "approved"
+              ? "Your leave request has been approved."
+              : "Your leave request has been rejected.",
+          type: status === "approved" ? "leave_approved" : "leave_rejected",
+          referenceId: leave._id,
+          referenceModel: "Leave",
+        });
+      }
 
       return res.status(200).json({
         success: true,
@@ -637,14 +692,8 @@ exports.updateLeave = async (req, res) => {
       leave.documents.push(...newDocuments);
     }
 
-    leave.managerApproval = {
-      status: "pending",
-    };
-
-    leave.hrApproval = {
-      status: "pending",
-    };
-
+    leave.managerApproval = { status: "pending" };
+    leave.hrApproval = { status: "pending" };
     leave.status = "pending_manager";
 
     await leave.save();
@@ -656,18 +705,14 @@ exports.updateLeave = async (req, res) => {
     });
   } catch (error) {
     console.log("UPDATE LEAVE ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // DELETE LEAVE
 exports.deleteLeave = async (req, res) => {
   try {
-    const loggedInUserId = req.user?.userId || req.user?.id;
+    const loggedInUserId = getUserId(req);
     const role = req.user.role;
 
     const leave = await Leave.findOne({
@@ -736,10 +781,6 @@ exports.deleteLeave = async (req, res) => {
     });
   } catch (error) {
     console.log("DELETE LEAVE ERROR:", error);
-
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

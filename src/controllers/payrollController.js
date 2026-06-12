@@ -251,80 +251,137 @@ exports.getAllPayrolls = async (req, res) => {
     });
   }
 };
-exports.getMyPayslip = async (req, res) => {
+exports.getMyPayslips = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
+
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
     });
+
     if (!employee) {
       return res.status(404).json({
         success: false,
         message: "Employee not found",
       });
     }
-    const payroll = await Payroll.findOne({
+
+    const joiningDate = employee.joiningDate
+      ? new Date(employee.joiningDate)
+      : null;
+
+    const relievingDate = employee.relievingDate
+      ? new Date(employee.relievingDate)
+      : new Date();
+
+    const payrolls = await Payroll.find({
       companyId: req.user.companyId,
       "employees.employeeId": employee._id,
     })
+      .populate("companyId", "companyName email")
+      .populate(
+        "employees.employeeId",
+        "employeeCode fullName email salary role"
+      )
       .sort({
         year: -1,
         month: -1,
         createdAt: -1,
       })
       .lean();
-    if (!payroll) {
-      return res.status(404).json({
-        success: false,
-        message: "No payroll found",
-      });
+
+    const filteredPayrolls = [];
+
+    for (const payroll of payrolls) {
+      const payrollDate = new Date(payroll.year, payroll.month - 1, 1);
+
+      if (
+        joiningDate &&
+        payrollDate <
+          new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
+      ) {
+        continue;
+      }
+
+      if (
+        relievingDate &&
+        payrollDate >
+          new Date(relievingDate.getFullYear(), relievingDate.getMonth(), 1)
+      ) {
+        continue;
+      }
+
+      const employeePayslip = payroll.employees.find(
+        (item) =>
+          item.employeeId &&
+          item.employeeId._id.toString() === employee._id.toString()
+      );
+
+      if (employeePayslip) {
+        filteredPayrolls.push({
+          _id: payroll._id,
+
+          companyId: payroll.companyId,
+
+          month: payroll.month,
+          year: payroll.year,
+          payrollName: payroll.payrollName,
+          period: payroll.period,
+
+          totalEmployees: payroll.totalEmployees,
+          totalEarnings: payroll.totalEarnings,
+          totalDeductions: payroll.totalDeductions,
+          netPayroll: payroll.netPayroll,
+          status: payroll.status,
+
+          employees: [
+            {
+              employeeId: employeePayslip.employeeId,
+
+              employeeCode: employeePayslip.employeeCode,
+              employeeName: employeePayslip.employeeName,
+              role: employeePayslip.role,
+              designation: employeePayslip.designation,
+              shiftName: employeePayslip.shiftName,
+
+              totalWorkingDays: employeePayslip.totalWorkingDays,
+              presentDays: employeePayslip.presentDays,
+              absentDays: employeePayslip.absentDays,
+
+              basicSalary: employeePayslip.basicSalary,
+              hra: employeePayslip.hra,
+              shiftAllowance: employeePayslip.shiftAllowance,
+              medicalAllowance: employeePayslip.medicalAllowance,
+              conveyanceAllowance: employeePayslip.conveyanceAllowance,
+              otherAllowance: employeePayslip.otherAllowance,
+
+              grossEarning: employeePayslip.grossEarning,
+
+              pfDeduction: employeePayslip.pfDeduction,
+              esiDeduction: employeePayslip.esiDeduction,
+              totalDeduction: employeePayslip.totalDeduction,
+
+              netSalary: employeePayslip.netSalary,
+              payslipUrl: employeePayslip.payslipUrl,
+            },
+          ],
+
+          createdAt: payroll.createdAt,
+          updatedAt: payroll.updatedAt,
+        });
+      }
     }
-    const payslip = payroll.employees.find(
-      (item) =>
-        item.employeeId.toString() === employee._id.toString()
-    );
-    if (!payslip) {
-      return res.status(404).json({
-        success: false,
-        message: "Payslip not found",
-      });
-    }
+
     res.status(200).json({
       success: true,
-      data: {
-        payrollId: payroll._id,
-        employeeId: employee._id,
-        employeeCode: payslip.employeeCode,
-        employeeName: payslip.employeeName,
-        role: payslip.role,
-        designation: payslip.designation,
-        shiftName: payslip.shiftName,
-        month: payroll.month,
-        year: payroll.year,
-        payrollName: payroll.payrollName,
-        period: payroll.period,
-        totalWorkingDays: payslip.totalWorkingDays,
-        presentDays: payslip.presentDays,
-        absentDays: payslip.absentDays,
-        basicSalary: payslip.basicSalary,
-        hra: payslip.hra,
-        shiftAllowance: payslip.shiftAllowance,
-        medicalAllowance: payslip.medicalAllowance,
-        conveyanceAllowance: payslip.conveyanceAllowance,
-        otherAllowance: payslip.otherAllowance,
-        grossEarning: payslip.grossEarning,
-        pfDeduction: payslip.pfDeduction,
-        esiDeduction: payslip.esiDeduction,
-        totalDeduction: payslip.totalDeduction,
-        netSalary: payslip.netSalary,
-        payslipUrl: payslip.payslipUrl,
-      },
+      count: filteredPayrolls.length,
+      payrolls: filteredPayrolls,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to fetch payslip",
+      message: "Failed to fetch payslips",
       error: error.message,
     });
   }
