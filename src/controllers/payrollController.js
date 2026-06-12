@@ -225,7 +225,14 @@ exports.getAllPayrolls = async (req, res) => {
     }
 
     const payrolls = await Payroll.find(filter)
-      .populate("employees.employeeId", "employeeCode fullName email salary role")
+      .populate(
+        "companyId",
+        "companyName email"
+      )
+      .populate(
+        "employees.employeeId",
+        "employeeCode fullName email salary role"
+      )
       .sort({
         year: -1,
         month: -1,
@@ -244,7 +251,6 @@ exports.getAllPayrolls = async (req, res) => {
     });
   }
 };
-
 exports.getMyPayslip = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
