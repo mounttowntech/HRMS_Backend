@@ -2,6 +2,7 @@ const router = require("express").Router();
 
 const c = require("../controllers/leaveController");
 const leaveUpload = require("../middleware/leaveUpload");
+
 const {
   verifyToken,
   allowRoles,
@@ -42,6 +43,7 @@ router.get(
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.getMyLeaves
 );
+
 router.put(
   "/:id",
   verifyToken,
@@ -56,4 +58,5 @@ router.delete(
   allowRoles("employee", "admin", "hr", "teamlead", "projectmanager"),
   c.deleteLeave
 );
+
 module.exports = router;

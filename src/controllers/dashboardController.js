@@ -7,7 +7,7 @@ const Onboarding = require("../models/Onboarding");
 const JobPost = require("../models/JobPost");
 const Candidate = require("../models/Candidate");
 const Project = require("../models/Project");
-
+const Payroll = require("../models/Payroll");
 const {
   percentage,
   getISTMonthRange,
@@ -24,34 +24,28 @@ exports.getAdminDashboard = async (req, res) => {
       status: "active",
     });
 
-    const present = await Attendance.countDocuments({
+    const presentToday = await Attendance.countDocuments({
       companyId,
       date: { $gte: start, $lte: end },
       status: "present",
     });
 
-    const absent = await Attendance.countDocuments({
-      companyId,
-      date: { $gte: start, $lte: end },
-      status: "absent",
-    });
-
-    const late = await Attendance.countDocuments({
-      companyId,
-      date: { $gte: start, $lte: end },
-      isLate: true,
-    });
-
-    const onLeave = await Leave.countDocuments({
+    const totalLeaves = await Leave.countDocuments({
       companyId,
       status: "approved",
       fromDate: { $lte: end },
       toDate: { $gte: start },
     });
 
+    const latestPayroll = await Payroll.findOne({
+      companyId,
+    })
+      .sort({ year: -1, month: -1, createdAt: -1 })
+      .lean();
+
     const pendingLeaveRequests = await Leave.countDocuments({
       companyId,
-      status: "pending",
+      status: { $in: ["pending", "pending_manager", "pending_hr"] },
     });
 
     const onboardingApprovals = await Onboarding.countDocuments({
@@ -79,22 +73,36 @@ exports.getAdminDashboard = async (req, res) => {
       data: {
         monthRange: { start, end },
 
+        dashboardCards: {
+          totalEmployees: {
+            count: totalEmployees,
+            label: "Active Employees",
+          },
+
+          presentToday: {
+            count: presentToday,
+            label: "Active Employees",
+          },
+
+          totalLeaves: {
+            count: totalLeaves,
+            label: "This Month",
+          },
+
+          netPayroll: {
+            amount: latestPayroll?.netPayroll || 0,
+            label: "This Month",
+          },
+        },
+
         attendanceOverview: {
           present: {
-            count: present,
-            percentage: percentage(present, totalEmployees),
+            count: presentToday,
+            percentage: percentage(presentToday, totalEmployees),
           },
           onLeave: {
-            count: onLeave,
-            percentage: percentage(onLeave, totalEmployees),
-          },
-          absent: {
-            count: absent,
-            percentage: percentage(absent, totalEmployees),
-          },
-          late: {
-            count: late,
-            percentage: percentage(late, totalEmployees),
+            count: totalLeaves,
+            percentage: percentage(totalLeaves, totalEmployees),
           },
         },
 
@@ -108,25 +116,6 @@ exports.getAdminDashboard = async (req, res) => {
           newApplicants,
           interviewsScheduled,
         },
-
-        talentPipeline: {
-          applied: newApplicants,
-          screening: await Candidate.countDocuments({
-            companyId,
-            status: "resume_screening",
-          }),
-          interview: interviewsScheduled,
-          hired: await Candidate.countDocuments({
-            companyId,
-            status: "selected",
-          }),
-        },
-
-        recentHiringUpdates: [
-          "3 positions moved to the interview stage this week.",
-          "5 candidates completed assessment tests.",
-          "2 offers accepted for software engineering roles.",
-        ],
       },
     });
   } catch (error) {

@@ -1,18 +1,50 @@
-const express = require("express");
-const router = express.Router();
+const router = require("express").Router();
+
+const c = require("../controllers/announcementController");
 
 const {
-  createAnnouncement,
-  getAnnouncements,
-  updateAnnouncement,
-  deleteAnnouncement,
-} = require("../controllers/announcementController");
+  verifyToken,
+  allowRoles,
+} = require("../middleware/authMiddleware");
 
-const { verifyToken } = require("../middleware/authMiddleware");
+// CREATE ANNOUNCEMENT
+router.post(
+  "/",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  c.createAnnouncement
+);
 
-router.post("/create", verifyToken, createAnnouncement);
-router.get("/all", verifyToken, getAnnouncements);
-router.put("/:id", verifyToken, updateAnnouncement);
-router.delete("/:id", verifyToken, deleteAnnouncement);
+// GET ROLE BASED ANNOUNCEMENTS
+router.get(
+  "/",
+  verifyToken,
+  allowRoles("employee", "admin", "hr", "teamlead", "projectmanager", "employer"),
+  c.getAnnouncements
+);
+
+// GET ALL ANNOUNCEMENTS
+router.get(
+  "/all",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  c.getAllAnnouncements
+);
+
+// UPDATE ANNOUNCEMENT
+router.put(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  c.updateAnnouncement
+);
+
+// DELETE ANNOUNCEMENT
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  c.deleteAnnouncement
+);
 
 module.exports = router;
