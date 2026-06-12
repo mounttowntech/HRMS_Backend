@@ -7,11 +7,31 @@ const {
   getPayrollById,
   getPayrollDashboard,
   getEmployeePayslip,
+  downloadEmployeePayslip,
+  sendEmployeePayslipMail,
+  getMyPayslip,
+  deletePayroll,
 } = require("../controllers/payrollController");
 
-const { verifyToken ,allowRoles} = require("../middleware/authMiddleware");
+const {
+  verifyToken,
+  allowRoles,
+} = require("../middleware/authMiddleware");
 
-router.post("/process", verifyToken, processPayroll);
+router.post(
+  "/process",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  processPayroll
+);
+
+router.get(
+  "/dashboard",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  getPayrollDashboard
+);
+
 router.get(
   "/all",
   verifyToken,
@@ -19,12 +39,50 @@ router.get(
   getAllPayrolls
 );
 router.get(
+  "/my-payslip",
+  verifyToken,
+  allowRoles(
+    "employee",
+    "teamlead",
+    "projectmanager",
+    "hr"
+  ),
+  getMyPayslip
+);
+router.get(
+  "/:payrollId/employee/:employeeId/payslip",
+  verifyToken,
+  allowRoles("admin", "hr", "employee", "teamlead", "projectmanager"),
+  getEmployeePayslip
+);
+
+router.get(
+  "/:payrollId/employee/:employeeId/download",
+  verifyToken,
+  allowRoles("admin", "hr","employee", "teamlead", "projectmanager"),
+  downloadEmployeePayslip
+);
+
+router.post(
+  "/:payrollId/employee/:employeeId/send-mail",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  sendEmployeePayslipMail
+);
+
+router.get(
+  "/:id",
+  verifyToken,
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
+  getPayrollById
+);
+
+
+router.delete(
   "/:id",
   verifyToken,
   allowRoles("admin", "hr", "employer"),
-  getPayrollById
+  deletePayroll
 );
-router.get("/dashboard", verifyToken, getPayrollDashboard);
-router.get("/:payrollId/employee/:employeeId/payslip", verifyToken, getEmployeePayslip);
 
 module.exports = router;
