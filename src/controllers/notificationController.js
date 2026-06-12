@@ -48,7 +48,7 @@ exports.createNotification = async (req, res) => {
 // ================= GET NOTIFICATIONS =================
 exports.getNotifications = async (req, res) => {
   try {
-
+console.log("user is :", req.user);
     const filter = {
       companyId: req.user.companyId,
       $or: [
@@ -56,9 +56,10 @@ exports.getNotifications = async (req, res) => {
         { userId: null }
       ],
     };
-
+console.log("filter is :", filter);
     const notifications = await Notification.find(filter)
       .sort({ createdAt: -1 });
+      console.log("notifications is :", notifications);
 
     const unreadCount = await Notification.countDocuments({
       ...filter,

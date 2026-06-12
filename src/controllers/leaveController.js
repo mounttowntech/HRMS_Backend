@@ -6,6 +6,8 @@ const Announcement = require("../models/announcementsModel");
 const { calculateDays } = require("../utils/calcDays");
 const sendEmail = require("../utils/sendMail");
 const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
+const Notification = require("../models/notificationModel");
+const User = require("../models/User");
 
 // CREATE HR ANNOUNCEMENT NOTIFICATION
 const createHRNotification = async ({
@@ -79,7 +81,10 @@ exports.applyLeave = async (req, res) => {
         fileUrl: `/uploads/leaves/${file.filename}`,
         mimeType: file.mimetype,
       })) || [];
-
+console.log("balance leave is :", {
+  balance,
+  days,
+});
     if (balance < days) {
       const leave = await Leave.create({
         companyId: req.user.companyId,
