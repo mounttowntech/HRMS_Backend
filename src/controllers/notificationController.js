@@ -1,7 +1,7 @@
 const Notification = require("../models/notificationModel");
 const User = require("../models/User");
 
-const getUserId = (req) => req.user?.userId || req.user?.id;
+const getUserId = (req) => req.user?.userId || req.user?.id || req.user?._id;
 
 const getTimeAgo = (date) => {
   const seconds = Math.floor((new Date() - new Date(date)) / 1000);
@@ -21,14 +21,8 @@ const getTimeAgo = (date) => {
 // CREATE SINGLE NOTIFICATION
 exports.createNotification = async (req, res) => {
   try {
-    const {
-      receiverId,
-      title,
-      message,
-      type,
-      referenceId,
-      referenceModel,
-    } = req.body;
+    const { receiverId, title, message, type, referenceId, referenceModel } =
+      req.body;
 
     if (!receiverId || !title || !message || !type) {
       return res.status(400).json({
@@ -74,17 +68,10 @@ exports.createNotification = async (req, res) => {
   }
 };
 
-// CREATE ROLE BASED NOTIFICATION
+// CREATE ROLE BASED NOTIFICATION - FIXED DUPLICATE ISSUE
 exports.createRoleNotification = async (req, res) => {
   try {
-    const {
-      roles,
-      title,
-      message,
-      type,
-      referenceId,
-      referenceModel,
-    } = req.body;
+    let { roles, title, message, type, referenceId, referenceModel } = req.body;
 
     if (!roles || !Array.isArray(roles) || roles.length === 0) {
       return res.status(400).json({
@@ -100,14 +87,28 @@ exports.createRoleNotification = async (req, res) => {
       });
     }
 
+    const senderId = getUserId(req);
+
+    // Remove employee role to avoid sending notification to all employees
+    roles = roles.filter((role) => role !== "employee");
+
+    // Remove duplicate roles
+    roles = [...new Set(roles)];
+
     const users = await User.find({
       companyId: req.user.companyId,
       role: { $in: roles },
-    }).select("_id role email");
+      _id: { $ne: senderId },
+    }).select("_id role email name userName");
 
-    const notifications = users.map((user) => ({
+    // Remove duplicate users
+    const uniqueUsers = [
+      ...new Map(users.map((user) => [user._id.toString(), user])).values(),
+    ];
+
+    const notifications = uniqueUsers.map((user) => ({
       companyId: req.user.companyId,
-      senderId: getUserId(req),
+      senderId,
       receiverId: user._id,
       title,
       message,
@@ -124,7 +125,7 @@ exports.createRoleNotification = async (req, res) => {
       success: true,
       message: "Role based notification created successfully",
       count: notifications.length,
-      users,
+      users: uniqueUsers,
     });
   } catch (error) {
     res.status(500).json({
@@ -172,28 +173,18 @@ exports.getMyNotifications = async (req, res) => {
     });
   }
 };
-// GET ALL NOTIFICATIONS - ADMIN / HR / EMPLOYER
+
+// GET ALL NOTIFICATIONS
 exports.getAllNotifications = async (req, res) => {
   try {
     const filter = {
       companyId: req.user.companyId,
     };
 
-    if (req.query.type) {
-      filter.type = req.query.type;
-    }
-
-    if (req.query.isRead === "true") {
-      filter.isRead = true;
-    }
-
-    if (req.query.isRead === "false") {
-      filter.isRead = false;
-    }
-
-    if (req.query.receiverId) {
-      filter.receiverId = req.query.receiverId;
-    }
+    if (req.query.type) filter.type = req.query.type;
+    if (req.query.isRead === "true") filter.isRead = true;
+    if (req.query.isRead === "false") filter.isRead = false;
+    if (req.query.receiverId) filter.receiverId = req.query.receiverId;
 
     const notifications = await Notification.find(filter)
       .populate("senderId", "name userName email role")
@@ -219,6 +210,7 @@ exports.getAllNotifications = async (req, res) => {
     });
   }
 };
+
 // GET UNREAD COUNT
 exports.getUnreadCount = async (req, res) => {
   try {

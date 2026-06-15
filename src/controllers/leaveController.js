@@ -31,6 +31,7 @@ const createHRAnnouncement = async ({ companyId, title, description, createdBy }
 };
 
 // APPLY LEAVE
+// APPLY LEAVE
 exports.applyLeave = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -128,10 +129,12 @@ exports.applyLeave = async (req, res) => {
       createdBy: userId,
     });
 
+    const notifyRoles = ["teamlead", "projectmanager", "hr", "admin"];
+
     await sendNotificationToRoles({
       companyId: req.user.companyId,
       senderId: userId,
-      roles: ["teamlead", "projectmanager", "hr", "admin"],
+      roles: notifyRoles,
       title: "New Leave Request",
       message: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
       type: "leave_request",
@@ -146,7 +149,10 @@ exports.applyLeave = async (req, res) => {
     });
   } catch (error) {
     console.log("APPLY LEAVE ERROR:", error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
