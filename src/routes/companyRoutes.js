@@ -24,7 +24,7 @@ router.post(
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr", "employee"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   getCompanies
 );
 
@@ -32,7 +32,7 @@ router.get(
 router.get(
   "/:id",
   verifyToken,
-  allowRoles("admin", "hr", "employee"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   getSingleCompany
 );
 
@@ -40,7 +40,7 @@ router.get(
 router.put(
   "/update/:id",
   verifyToken,
-  allowRoles("admin", "hr", "employee"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   updateCompany
 );
 
@@ -49,7 +49,7 @@ router.put(
 router.delete(
   "/delete/:id",
   verifyToken,
-  allowRoles("admin", "hr", "employee"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   deleteCompany
 );
 
