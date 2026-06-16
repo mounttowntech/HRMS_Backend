@@ -403,7 +403,7 @@ exports.getLeaves = async (req, res) => {
 
       const teamEmployees = await Employee.find({
         companyId: req.user.companyId,
-        reportingManager: teamLead._id,
+        projectManager: teamLead._id,
       }).select("_id");
 
       filter.employeeId = {
@@ -551,7 +551,6 @@ exports.updateLeave = async (req, res) => {
           _id: leave.employeeId,
           companyId: req.user.companyId,
           $or: [
-            { reportingManager: loggedEmployee._id },
             { projectManager: loggedEmployee._id },
           ],
         });
@@ -650,7 +649,6 @@ exports.updateLeave = async (req, res) => {
         _id: leave.employeeId,
         companyId: req.user.companyId,
         $or: [
-          { reportingManager: loggedEmployee._id },
           { projectManager: loggedEmployee._id },
         ],
       });
@@ -761,7 +759,6 @@ exports.deleteLeave = async (req, res) => {
         _id: leave.employeeId,
         companyId: req.user.companyId,
         $or: [
-          { reportingManager: loggedEmployee._id },
           { projectManager: loggedEmployee._id },
         ],
       });
