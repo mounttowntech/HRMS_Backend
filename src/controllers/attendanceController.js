@@ -8,6 +8,11 @@ const {
   getISTStartOfDay,
   getISTEndOfDay,
 } = require("../utils/attendanceDate");
+
+const {
+  minutesDiff,
+  calculateAttendance,
+} = require("../utils/attendanceCalculator");
 // ======================================================
 // DATE HELPERS
 // ======================================================
@@ -28,41 +33,41 @@ const getDateKey = (date) => {
     timeZone: "Asia/Kolkata",
   });
 };
-const minutesDiff = (start, end) => {
-  return Math.floor((new Date(end) - new Date(start)) / 60000);
-};
+// const minutesDiff = (start, end) => {
+//   return Math.floor((new Date(end) - new Date(start)) / 60000);
+// };
 
 // ======================================================
 // CALCULATE ATTENDANCE
 // ======================================================
 
-const calculateAttendance = (attendance) => {
-  const totalBreakMinutes = attendance.breaks.reduce(
-    (sum, b) => sum + (b.minutes || 0),
-    0
-  );
+// const calculateAttendance = (attendance) => {
+//   const totalBreakMinutes = attendance.breaks.reduce(
+//     (sum, b) => sum + (b.minutes || 0),
+//     0
+//   );
 
-  attendance.totalBreakMinutes = totalBreakMinutes;
+//   attendance.totalBreakMinutes = totalBreakMinutes;
 
-  if (attendance.punchIn && attendance.punchOut) {
-    const totalMinutes = minutesDiff(
-      attendance.punchIn,
-      attendance.punchOut
-    );
+//   if (attendance.punchIn && attendance.punchOut) {
+//     const totalMinutes = minutesDiff(
+//       attendance.punchIn,
+//       attendance.punchOut
+//     );
 
-    attendance.workingMinutes = Math.max(
-      0,
-      totalMinutes - totalBreakMinutes
-    );
+//     attendance.workingMinutes = Math.max(
+//       0,
+//       totalMinutes - totalBreakMinutes
+//     );
 
-    attendance.status =
-      attendance.workingMinutes < 240
-        ? "half_day"
-        : "present";
-  }
+//     attendance.status =
+//       attendance.workingMinutes < 240
+//         ? "half_day"
+//         : "present";
+//   }
 
-  return attendance;
-};
+//   return attendance;
+// };
 
 // ======================================================
 // VERIFY EMPLOYEE PASSWORD
@@ -152,12 +157,9 @@ const verifyEmployeePassword = async (
 
 exports.employeePunchIn = async (req, res) => {
   try {
-    const { employeeCode } = req.body;
-
     const employee = await Employee.findOne({
+      userId: req.user.id,
       companyId: req.user.companyId,
-      employeeCode,
-      status: "active",
     });
 
     if (!employee) {
@@ -178,7 +180,7 @@ exports.employeePunchIn = async (req, res) => {
     if (attendance?.punchIn) {
       return res.status(400).json({
         success: false,
-        message: "Already punched in today",
+        message: "Already punched in",
       });
     }
 
@@ -186,28 +188,22 @@ exports.employeePunchIn = async (req, res) => {
       attendance = new Attendance({
         companyId: req.user.companyId,
         employeeId: employee._id,
-
-        date: getISTStartOfDay(),
-
         attendanceDate,
+        date: new Date(),
       });
     }
 
     attendance.punchIn = new Date();
-    attendance.punchInSource = "employee_login";
-    attendance.status = "present";
 
     await attendance.save();
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
-      message: "Punch In Successful",
+      message: "Punch in successful",
       attendance,
     });
   } catch (error) {
-    console.log(error);
-
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -217,22 +213,137 @@ exports.employeePunchIn = async (req, res) => {
 // EMPLOYEE PUNCH OUT
 // ======================================================
 
+
+
+
+
 exports.employeePunchOut = async (req, res) => {
+
   try {
-    const { employeeCode } = req.body;
 
     const employee = await Employee.findOne({
+
+      userId: req.user.id,
+
       companyId: req.user.companyId,
-      employeeCode,
-      status: "active",
+
     });
 
-    if (!employee) {
+
+
+    const attendanceDate = getISTDateString();
+
+
+
+    const attendance = await Attendance.findOne({
+
+      companyId: req.user.companyId,
+
+      employeeId: employee._id,
+
+      attendanceDate,
+
+    });
+
+
+
+    if (!attendance) {
+
       return res.status(404).json({
+
         success: false,
-        message: "Employee not found",
+
+        message: "Attendance not found",
+
       });
+
     }
+
+
+
+    if (attendance.punchOut) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "Already punched out",
+
+      });
+
+    }
+
+
+
+    const activeBreak =
+
+      attendance.breaks[attendance.breaks.length - 1];
+
+
+
+    if (activeBreak && !activeBreak.breakOut) {
+
+      activeBreak.breakOut = new Date();
+
+
+
+      activeBreak.minutes = 60;
+
+
+
+      activeBreak.source =
+
+        "auto_closed_default_60_min";
+
+    }
+
+
+
+    attendance.punchOut = new Date();
+
+
+
+    calculateAttendance(attendance);
+
+
+
+    await attendance.save();
+
+
+
+    res.status(200).json({
+
+      success: true,
+
+      message: "Punch out successful",
+
+      attendance,
+
+    });
+
+  } catch (error) {
+
+    res.status(500).json({
+
+      success: false,
+
+      message: error.message,
+
+    });
+
+  }
+
+};
+// ======================================================
+// START BREAK
+// ======================================================
+
+exports.startBreak = async (req, res) => {
+  try {
+    const employee = await Employee.findOne({
+      userId: req.user.id,
+      companyId: req.user.companyId,
+    });
 
     const attendanceDate = getISTDateString();
 
@@ -242,81 +353,15 @@ exports.employeePunchOut = async (req, res) => {
       attendanceDate,
     });
 
-    if (!attendance || !attendance.punchIn) {
-      return res.status(400).json({
+    if (!attendance) {
+      return res.status(404).json({
         success: false,
-        message: "Punch In First",
-      });
-    }
-
-    if (attendance.punchOut) {
-      return res.status(400).json({
-        success: false,
-        message: "Already Punched Out",
-      });
-    }
-
-    attendance.punchOut = new Date();
-    attendance.punchOutSource = "employee_login";
-
-    calculateAttendance(attendance);
-
-    await attendance.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Punch Out Successful",
-      attendance,
-    });
-  } catch (error) {
-    console.log(error);
-
-    return res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
-// ======================================================
-// START BREAK
-// ======================================================
-
-exports.startBreak = async (req, res) => {
-  try {
-    const { employeeId, source } = req.body;
-
-    if (!employeeId) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeId is required",
-      });
-    }
-
-    const attendance = await Attendance.findOne({
-      companyId: req.user.companyId,
-      employeeId,
-      date: today(),
-    });
-
-    if (!attendance || !attendance.punchIn) {
-      return res.status(400).json({
-        success: false,
-        message: "Punch in first",
-      });
-    }
-
-    if (attendance.punchOut) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Cannot start break after punch out",
+        message: "Attendance not found",
       });
     }
 
     const lastBreak =
-      attendance.breaks[
-        attendance.breaks.length - 1
-      ];
+      attendance.breaks[attendance.breaks.length - 1];
 
     if (lastBreak && !lastBreak.breakOut) {
       return res.status(400).json({
@@ -327,19 +372,15 @@ exports.startBreak = async (req, res) => {
 
     attendance.breaks.push({
       breakIn: new Date(),
-      source: source || "manual",
     });
 
     await attendance.save();
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Break started",
-      attendance,
     });
   } catch (error) {
-    console.log("BREAK START ERROR:", error);
-
     res.status(500).json({
       success: false,
       message: error.message,
@@ -353,128 +394,43 @@ exports.startBreak = async (req, res) => {
 
 exports.endBreak = async (req, res) => {
   try {
-    const { employeeId } = req.body;
+    const employee = await Employee.findOne({
+      userId: req.user.id,
+      companyId: req.user.companyId,
+    });
 
-    if (!employeeId) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeId is required",
-      });
-    }
+    const attendanceDate = getISTDateString();
 
-    // ==========================================
-    // FIND ATTENDANCE
-    // ==========================================
-
-    const attendance =
-      await Attendance.findOne({
-        companyId: req.user.companyId,
-        employeeId,
-        date: today(),
-      });
-
-    if (
-      !attendance ||
-      !attendance.punchIn
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Punch in first",
-      });
-    }
-
-    // ==========================================
-    // FIND ACTIVE BREAK
-    // ==========================================
+    const attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      attendanceDate,
+    });
 
     const lastBreak =
-      attendance.breaks[
-        attendance.breaks.length - 1
-      ];
+      attendance.breaks[attendance.breaks.length - 1];
 
-    if (
-      !lastBreak ||
-      lastBreak.breakOut
-    ) {
+    if (!lastBreak || lastBreak.breakOut) {
       return res.status(400).json({
         success: false,
-        message: "No active break",
+        message: "No active break found",
       });
     }
 
-    // ==========================================
-    // END BREAK
-    // ==========================================
+    lastBreak.breakOut = new Date();
 
-    lastBreak.breakOut =
-      new Date();
-
-    lastBreak.minutes =
-      minutesDiff(
-        lastBreak.breakIn,
-        lastBreak.breakOut
-      );
-
-    calculateAttendance(
-      attendance
+    lastBreak.minutes = Math.floor(
+      (lastBreak.breakOut - lastBreak.breakIn) /
+        60000
     );
 
     await attendance.save();
 
-    // ==========================================
-    // FORMAT TIME
-    // ==========================================
-
-    const formattedBreak =
-      {
-        breakIn:
-          lastBreak.breakIn.toLocaleTimeString(
-            "en-IN",
-            {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: true,
-            }
-          ),
-
-        breakOut:
-          lastBreak.breakOut.toLocaleTimeString(
-            "en-IN",
-            {
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
-              hour12: true,
-            }
-          ),
-
-        minutes:
-          lastBreak.minutes,
-
-        source:
-          lastBreak.source,
-      };
-
-    // ==========================================
-    // RESPONSE
-    // ==========================================
-
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Break ended",
-
-      breakDetails:
-        formattedBreak,
-
-      attendance,
     });
   } catch (error) {
-    console.log(
-      "BREAK END ERROR:",
-      error
-    );
-
     res.status(500).json({
       success: false,
       message: error.message,
