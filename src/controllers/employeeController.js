@@ -364,7 +364,7 @@ exports.getEmployees = async (req, res) => {
     const employees = await populateEmployee(
       Employee.find({
         companyId: req.user.companyId,
-      }).sort({ createdAt: -1 }),
+      })
     );
 
     res.status(200).json({
