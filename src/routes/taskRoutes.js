@@ -29,13 +29,14 @@ router.get(
 router.put(
   "/:id",
   verifyToken,
-  allowRoles("admin", "hr", "teamlead", "projectmanager"),
+  allowRoles("admin", "hr", "teamlead", "projectmanager", "employee"),
   taskController.updateTask
 );
 
 router.patch(
   "/:id/status",
   verifyToken,
+  allowRoles("admin", "hr", "teamlead", "projectmanager", "employee"),
   taskController.updateTaskStatus
 );
 

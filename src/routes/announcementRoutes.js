@@ -27,7 +27,7 @@ router.get(
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr", "employer"),
+  allowRoles("admin", "hr", "employee"),
   c.getAllAnnouncements
 );
 

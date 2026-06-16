@@ -112,6 +112,15 @@ console.log("balance leave is :", {
       });
     }
 
+    console.log("req.user:", req.user);
+console.log("userId:", userId);
+
+console.log("Employee found:", emp);
+
+console.log("req.body:", req.body);
+
+console.log("companyId:", req.user.companyId);
+
     const leave = await Leave.create({
       companyId: req.user.companyId,
       employeeId: emp._id,

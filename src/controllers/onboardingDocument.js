@@ -1,4 +1,4 @@
-const OnboardingDocument = require("../models/OnboardingDocument");
+const OnboardingDocument = require("../models/onboardingDocument");
 const Onboarding = require("../models/Onboarding");
 const Employee = require("../models/Employee");
 

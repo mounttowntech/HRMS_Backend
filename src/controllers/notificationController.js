@@ -143,7 +143,7 @@ exports.getMyNotifications = async (req, res) => {
 
     const filter = {
       companyId: req.user.companyId,
-      receiverId: userId,
+      receiverId: user._id,
     };
 
     if (req.query.type) filter.type = req.query.type;
@@ -240,11 +240,14 @@ exports.markAsRead = async (req, res) => {
   try {
     const userId = getUserId(req);
 
+    console.log("_id is : ", req.params.id)
+    console.log("_id is : ", req.user.companyId)
+    console.log("_id is : ", userId)
     const notification = await Notification.findOneAndUpdate(
       {
         _id: req.params.id,
         companyId: req.user.companyId,
-        receiverId: userId,
+        // receiverId: userId,
       },
       {
         isRead: true,
