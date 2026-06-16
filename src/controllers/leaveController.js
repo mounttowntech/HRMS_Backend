@@ -16,21 +16,21 @@ const {
 
 const getUserId = (req) => req.user?.userId || req.user?.id;
 
-const createHRAnnouncement = async ({ companyId, title, description, createdBy }) => {
-  try {
-    await Announcement.create({
-      companyId,
-      title,
-      description,
-      targetRoles: ["hr"],
-      priority: "high",
-      status: "active",
-      createdBy,
-    });
-  } catch (error) {
-    console.log("HR ANNOUNCEMENT ERROR:", error.message);
-  }
-};
+// const createHRAnnouncement = async ({ companyId, title, description, createdBy }) => {
+//   try {
+//     await Announcement.create({
+//       companyId,
+//       title,
+//       description,
+//       targetRoles: ["hr"],
+//       priority: "high",
+//       status: "active",
+//       createdBy,
+//     });
+//   } catch (error) {
+//     console.log("HR ANNOUNCEMENT ERROR:", error.message);
+//   }
+// };
 
 // APPLY LEAVE
 // APPLY LEAVE
@@ -136,12 +136,12 @@ console.log("companyId:", req.user.companyId);
       hrApproval: { status: "pending" },
     });
 
-    await createHRAnnouncement({
-      companyId: req.user.companyId,
-      title: "New Leave Request",
-      description: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
-      createdBy: userId,
-    });
+    // await createHRAnnouncement({
+    //   companyId: req.user.companyId,
+    //   title: "New Leave Request",
+    //   description: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
+    //   createdBy: userId,
+    // });
 
     const notifyRoles = ["teamlead", "projectmanager", "hr", "admin"];
 
@@ -217,14 +217,14 @@ exports.managerApproval = async (req, res) => {
     }
 
     if (approved) {
-      await createHRAnnouncement({
-        companyId: req.user.companyId,
-        title: "Leave Waiting for HR Approval",
-        description: `${
-          emp?.fullName || "Employee"
-        } leave request is approved by manager and waiting for HR approval.`,
-        createdBy: getUserId(req),
-      });
+      // await createHRAnnouncement({
+      //   companyId: req.user.companyId,
+      //   title: "Leave Waiting for HR Approval",
+      //   description: `${
+      //     emp?.fullName || "Employee"
+      //   } leave request is approved by manager and waiting for HR approval.`,
+      //   createdBy: getUserId(req),
+      // });
 
       await sendNotificationToRoles({
         companyId: req.user.companyId,
@@ -587,14 +587,14 @@ exports.updateLeave = async (req, res) => {
         if (status === "approved") {
           const emp = await Employee.findById(leave.employeeId);
 
-          await createHRAnnouncement({
-            companyId: req.user.companyId,
-            title: "Leave Waiting for HR Approval",
-            description: `${
-              emp?.fullName || "Employee"
-            } leave request is approved by manager and waiting for HR approval.`,
-            createdBy: getUserId(req),
-          });
+          // await createHRAnnouncement({
+          //   companyId: req.user.companyId,
+          //   title: "Leave Waiting for HR Approval",
+          //   description: `${
+          //     emp?.fullName || "Employee"
+          //   } leave request is approved by manager and waiting for HR approval.`,
+          //   createdBy: getUserId(req),
+          // });
 
           await sendNotificationToRoles({
             companyId: req.user.companyId,

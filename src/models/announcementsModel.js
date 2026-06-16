@@ -20,10 +20,11 @@ const announcementSchema = new mongoose.Schema(
       trim: true,
     },
 
-    targetRoles: [
+    audience: [
       {
         type: String,
         enum: [
+          "all",
           "employer",
           "admin",
           "hr",

@@ -3,7 +3,7 @@ const Announcement = require("../models/announcementsModel");
 // CREATE ANNOUNCEMENT
 exports.createAnnouncement = async (req, res) => {
   try {
-    const { title, description, targetRoles, priority } = req.body;
+    const { title, description, audience, priority } = req.body;
 
     if (!title || !description) {
       return res.status(400).json({
@@ -16,7 +16,7 @@ exports.createAnnouncement = async (req, res) => {
       companyId: req.user.companyId,
       title,
       description,
-      targetRoles: targetRoles || [],
+      audience: audience || [],
       priority: priority || "medium",
       status: "active",
       createdBy: req.user.id || req.user.userId,
@@ -45,8 +45,8 @@ exports.getAnnouncements = async (req, res) => {
       companyId: req.user.companyId,
       status: "active",
       $or: [
-        { targetRoles: { $size: 0 } },
-        { targetRoles: role },
+        { audience: { $size: 0 } },
+        { audience: role },
       ],
     }).sort({ createdAt: -1 });
 
