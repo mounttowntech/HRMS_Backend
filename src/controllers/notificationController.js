@@ -155,7 +155,7 @@ exports.getMyNotifications = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedNotifications = notifications.map((item) => ({
+    const formattedNotifications = uniqueNotifications.map((item) => ({
       ...item,
       timeAgo: getTimeAgo(item.createdAt),
     }));
@@ -177,8 +177,10 @@ exports.getMyNotifications = async (req, res) => {
 // GET ALL NOTIFICATIONS
 exports.getAllNotifications = async (req, res) => {
   try {
+    console.log("Company ID:", req.user);
     const filter = {
       companyId: req.user.companyId,
+      receiverId: req.user?.id || { $exists: true },
     };
 
     if (req.query.type) filter.type = req.query.type;
@@ -192,7 +194,7 @@ exports.getAllNotifications = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedNotifications = notifications.map((item) => ({
+    const formattedNotifications = uniqueNotifications.map((item) => ({
       ...item,
       timeAgo: getTimeAgo(item.createdAt),
     }));
