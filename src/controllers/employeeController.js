@@ -16,9 +16,7 @@ const populateEmployee = (query) => {
     .populate(
       "shiftId",
       "shiftName shiftType startTime endTime graceMinutes weekOff status",
-    )
-    .populate("reportingManager", "fullName email employeeCode")
-    .populate("projectManager", "fullName email employeeCode");
+    ).populate("projectManager", "fullName email employeeCode");
 };
 
 // ==============================
@@ -122,8 +120,6 @@ exports.createEmployee = async (req, res) => {
       role,
 
       attendanceMode,
-
-      reportingManager,
 
       projectManager,
 
@@ -299,9 +295,7 @@ exports.createEmployee = async (req, res) => {
 
       attendanceMode: attendanceMode || "employee_login",
 
-      reportingManager: reportingManager || null,
-
-      projectManager: projectManager || null,
+      projectManager: cleanObjectId(req.body.projectManager) || null,
 
       status: status || "active",
 
@@ -364,7 +358,7 @@ exports.getEmployees = async (req, res) => {
     const employees = await populateEmployee(
       Employee.find({
         companyId: req.user.companyId,
-      }).sort({ createdAt: -1 }),
+      })
     );
 
     res.status(200).json({
@@ -413,6 +407,24 @@ exports.getEmployeeById = async (req, res) => {
 };
 
 // ==============================
+// GET EMPLOYEE BY ID (FOR TEAMLEAD)
+// ==============================
+
+const cleanObjectId = (value) => {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined ||
+    value === "null" ||
+    value === "undefined"
+  ) {
+    return null;
+  }
+
+  return value;
+};
+
+// ==============================
 // UPDATE EMPLOYEE
 // ==============================
 
@@ -449,6 +461,7 @@ exports.updateEmployee = async (req, res) => {
 
     const updateData = {
       ...req.body,
+      projectManager: cleanObjectId(req.body.projectManager),
     };
 
     delete updateData.employeeCode;

@@ -120,15 +120,8 @@ const employeeSchema = new mongoose.Schema(
       default: "employee_login",
     },
 
-    reportingManager: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
-      default: null,
-    },
-
     projectManager: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
       default: null,
     },
 
