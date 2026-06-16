@@ -37,6 +37,12 @@ exports.getAdminDashboard = async (req, res) => {
       toDate: { $gte: start },
     });
 
+    const absentTodayRaw =
+      totalEmployees - presentToday - totalLeaves;
+
+    const absentToday =
+      absentTodayRaw < 0 ? 0 : absentTodayRaw;
+
     const latestPayroll = await Payroll.findOne({
       companyId,
     })
@@ -45,12 +51,16 @@ exports.getAdminDashboard = async (req, res) => {
 
     const pendingLeaveRequests = await Leave.countDocuments({
       companyId,
-      status: { $in: ["pending", "pending_manager", "pending_hr"] },
+      status: {
+        $in: ["pending", "pending_manager", "pending_hr"],
+      },
     });
 
     const onboardingApprovals = await Onboarding.countDocuments({
       companyId,
-      status: { $in: ["pending", "hr_verification", "admin_access"] },
+      status: {
+        $in: ["pending", "hr_verification", "admin_access"],
+      },
     });
 
     const openPositions = await JobPost.countDocuments({
@@ -65,13 +75,18 @@ exports.getAdminDashboard = async (req, res) => {
 
     const interviewsScheduled = await Candidate.countDocuments({
       companyId,
-      status: { $in: ["interview", "hr_interview", "technical_round"] },
+      status: {
+        $in: ["interview", "hr_interview", "technical_round"],
+      },
     });
 
     res.status(200).json({
       success: true,
       data: {
-        monthRange: { start, end },
+        monthRange: {
+          start,
+          end,
+        },
 
         dashboardCards: {
           totalEmployees: {
@@ -81,12 +96,17 @@ exports.getAdminDashboard = async (req, res) => {
 
           presentToday: {
             count: presentToday,
-            label: "Active Employees",
+            label: "Present Today",
           },
 
           totalLeaves: {
             count: totalLeaves,
             label: "This Month",
+          },
+
+          absentToday: {
+            count: absentToday,
+            label: "Absent Today",
           },
 
           netPayroll: {
@@ -98,11 +118,26 @@ exports.getAdminDashboard = async (req, res) => {
         attendanceOverview: {
           present: {
             count: presentToday,
-            percentage: percentage(presentToday, totalEmployees),
+            percentage: percentage(
+              presentToday,
+              totalEmployees
+            ),
           },
+
           onLeave: {
             count: totalLeaves,
-            percentage: percentage(totalLeaves, totalEmployees),
+            percentage: percentage(
+              totalLeaves,
+              totalEmployees
+            ),
+          },
+
+          absent: {
+            count: absentToday,
+            percentage: percentage(
+              absentToday,
+              totalEmployees
+            ),
           },
         },
 
