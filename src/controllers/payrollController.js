@@ -7,7 +7,7 @@ const Payroll = require("../models/Payroll");
 
 const {
   getMonthRangeByMonthYear,
-} = require("../utils/dashboardUtils");
+} = require("../utils/dashboardutils");
 
 const generatePayslip = require("../utils/generatePayslip");
 const sendEmail = require("../utils/sendMail");

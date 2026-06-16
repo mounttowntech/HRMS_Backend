@@ -1,4 +1,6 @@
 const express = require("express");
+const mongoose = require("mongoose");
+const path = require("path");
 const cors = require("cors");
 const app = express();
 app.use(cors());
@@ -6,11 +8,34 @@ app.use(cors());
 app.use(express.json());
 
 app.use(express.urlencoded({ extended: true }));
+console.log("UPLOAD PATH app pp.js:");
+// app.use("/uploads", express.static("uploads"));
 
-app.use("/uploads", express.static("uploads"));
-app.get("/", (req, res) =>
-  res.json({ success: true, message: "HRMS Complete Workflow API working" }),
-);
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// app.get("/", (req, res) => {
+//   res.json({
+//     success: true,
+//     message: "HRMS API Running",
+//   });
+// });
+app.get("/env-test", (req, res) => {
+  res.json({
+    atlasExists: !!process.env.MONGODB_ATLAS,
+    atlasStart: process.env.MONGODB_ATLAS?.substring(0, 30),
+    nodeEnv: process.env.NODE_ENV,
+  });
+});
+
+app.get("/mongo-status", (req, res) => {
+  res.json({
+    readyState: mongoose.connection.readyState,
+    host: mongoose.connection.host,
+    db: mongoose.connection.name,
+  });
+});
+// app.get("/", (req, res) =>
+//   res.json({ success: true, message: "HRMS Complete Workflow API working" }),
+// );
 app.use("/api/auth", require("./src/routes/authRoutes"));
 app.use("/api/company", require("./src/routes/companyRoutes"));
 app.use("/api/roles", require("./src/routes/roleRoutes"));
@@ -38,6 +63,12 @@ app.use("/api/industry-types", require("./src/routes/industryTypeRoutes"));
 app.use("/api/clients",require("./src/routes/clientRoutes"));
 app.use("/api/onboarding-documents",require("./src/routes/onboardingDocumentRoutes"));
 app.use("/api/holiday",require("./src/routes/holidayRoutes"));
+
+app.use(express.static(path.join(__dirname, "build")));
+
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, "build", "index.html"));
+});
 
 module.exports = app;
 
