@@ -43,7 +43,6 @@ exports.processPayroll = async (req, res) => {
     }
 
     const { start, end } = getMonthRangeByMonthYear(month, year);
-    const totalWorkingDays = new Date(year, month, 0).getDate();
 
     const monthName = new Date(year, month - 1).toLocaleString("en-US", {
       month: "short",
@@ -67,6 +66,18 @@ exports.processPayroll = async (req, res) => {
     let netPayroll = 0;
 
     for (const employee of employees) {
+      const shiftName =
+        employee.shiftId?.shiftName ||
+        employee.shiftId?.name ||
+        employee.shiftType ||
+        "Morning Shift";
+
+      const isNightShift = shiftName.toLowerCase().includes("night");
+
+      // Morning Shift = 24 working days
+      // Night Shift = 22 working days
+      const totalWorkingDays = isNightShift ? 22 : 24;
+
       const presentDays = await Attendance.countDocuments({
         companyId,
         employeeId: employee._id,
@@ -74,27 +85,29 @@ exports.processPayroll = async (req, res) => {
         status: "present",
       });
 
-      const absentDays = totalWorkingDays - presentDays;
+      const absentDays = Math.max(0, totalWorkingDays - presentDays);
 
       const monthlySalary = Number(employee.salary || employee.basicSalary || 0);
-      const earnedSalary = (monthlySalary / totalWorkingDays) * presentDays;
 
-      const basicSalary = earnedSalary * 0.45;
-      const hra = earnedSalary * 0.1718;
+      const perDaySalary =
+        totalWorkingDays > 0 ? monthlySalary / totalWorkingDays : 0;
 
-      const shiftName =
-        employee.shiftId?.shiftName ||
-        employee.shiftId?.name ||
-        employee.shiftType ||
-        "Day Shift";
+      const earnedSalary = perDaySalary * presentDays;
 
-      const isNightShift = shiftName.toLowerCase().includes("night");
+      // Morning Shift = 50% basic
+      // Night Shift = 40% basic
+      const basicSalary = isNightShift
+        ? earnedSalary * 0.4
+        : earnedSalary * 0.5;
+
+      const hra = basicSalary * 0.4;
 
       const shiftAllowance = isNightShift
-        ? earnedSalary * 0.1041
+        ? earnedSalary * 0.1
         : earnedSalary * 0.05;
 
       const medicalAllowance = earnedSalary * 0.0852;
+
       const conveyanceAllowance = earnedSalary * 0.0852;
 
       const calculatedTotal =
@@ -114,10 +127,15 @@ exports.processPayroll = async (req, res) => {
         conveyanceAllowance +
         otherAllowance;
 
+      // PF = 12% of Basic Salary
       const pfDeduction = basicSalary * 0.12;
-      const esiDeduction = grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
+
+      // ESI = 0.75% of Gross Salary if gross <= 21000
+      const esiDeduction =
+        grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
 
       const totalDeduction = pfDeduction + esiDeduction;
+
       const netSalary = grossEarning - totalDeduction;
 
       const designation =
@@ -132,6 +150,8 @@ exports.processPayroll = async (req, res) => {
         absentDays,
 
         monthlySalary: roundAmount(monthlySalary),
+        perDaySalary: roundAmount(perDaySalary),
+
         designation,
         shiftName,
 
@@ -165,7 +185,9 @@ exports.processPayroll = async (req, res) => {
         role: employee.role,
         designation,
         shiftName,
+
         ...payrollData,
+
         payslipUrl,
       });
 

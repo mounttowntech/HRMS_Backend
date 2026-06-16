@@ -122,7 +122,7 @@ const employeeSchema = new mongoose.Schema(
 
     reportingManager: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Employee",
+      ref: "",
       default: null,
     },
 
