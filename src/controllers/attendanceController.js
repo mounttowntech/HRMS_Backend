@@ -490,6 +490,17 @@ exports.getAttendance = async (req, res) => {
     // If date not passed, use today IST date
     const selectedDate = date || getISTDateString();
 
+    // Today IST date
+    const todayDate = getISTDateString();
+
+    // Block future dates
+    if (new Date(selectedDate) > new Date(todayDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot view future attendance",
+      });
+    }
+
     const { start, end } = getDateRange(selectedDate);
 
     const employeeFilter = {
@@ -581,8 +592,8 @@ exports.getAttendance = async (req, res) => {
         date: selectedDate,
         status,
 
-        punchIn: attendanceData?.punchIn || null,
-        punchOut: attendanceData?.punchOut || null,
+        punchInDateTime: attendanceData?.punchIn || null,
+        punchOutDateTime: attendanceData?.punchOut || null,
 
         checkInTime: formatTime(attendanceData?.punchIn),
         checkOutTime: formatTime(attendanceData?.punchOut),
