@@ -3,15 +3,17 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
+const PermissionRequest = require("../models/permissionRequest");
+
 const {
   getISTDateString,
   getISTStartOfDay,
-  getISTEndOfDay,
 } = require("../utils/attendanceDate");
 
 const {
   minutesDiff,
   calculateAttendance,
+  calculateLateMinutes,
 } = require("../utils/attendanceCalculator");
 // ======================================================
 // DATE HELPERS
@@ -151,16 +153,85 @@ const verifyEmployeePassword = async (
   }
 };
 
-// ======================================================
-// EMPLOYEE PUNCH IN
-// ======================================================
 
+
+
+const getUserId = (req) => req.user?.userId || req.user?.id;
+
+const getShiftName = (employee) => {
+  return (
+    employee.shiftId?.shiftName ||
+    employee.shiftId?.name ||
+    employee.shiftType ||
+    "Day Shift"
+  );
+};
+
+const formatTime = (date) => {
+  if (!date) return null;
+
+  return new Date(date).toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+const getDateRange = (date) => {
+  const start = new Date(`${date}T00:00:00+05:30`);
+  const end = new Date(`${date}T23:59:59.999+05:30`);
+  return { start, end };
+};
+
+const getMonthRange = (month, year) => {
+  const start = new Date(
+    `${year}-${String(month).padStart(2, "0")}-01T00:00:00+05:30`
+  );
+
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + 1);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+
+  return { start, end };
+};
+
+const calculateBreakDetails = (attendance) => {
+  const actualBreakMinutes =
+    attendance?.breaks?.reduce((sum, item) => {
+      if (item.minutes) return sum + item.minutes;
+
+      if (item.breakIn && item.breakOut) {
+        return sum + minutesDiff(item.breakIn, item.breakOut);
+      }
+
+      return sum;
+    }, 0) || 0;
+
+  return {
+    allowedBreakMinutes: 60,
+    actualBreakMinutes,
+    extraBreakMinutes:
+      actualBreakMinutes > 60 ? actualBreakMinutes - 60 : 0,
+  };
+};
+
+const roundAmount = (amount) => {
+  return Number((amount || 0).toFixed(2));
+};
+
+// EMPLOYEE PUNCH IN
 exports.employeePunchIn = async (req, res) => {
   try {
+    const userId = getUserId(req);
+
     const employee = await Employee.findOne({
-      userId: req.user.id,
+      userId,
       companyId: req.user.companyId,
-    });
+      status: "active",
+    })
+      .populate("shiftId", "shiftName name")
+      .lean();
 
     if (!employee) {
       return res.status(404).json({
@@ -189,11 +260,15 @@ exports.employeePunchIn = async (req, res) => {
         companyId: req.user.companyId,
         employeeId: employee._id,
         attendanceDate,
-        date: new Date(),
+        date: getISTStartOfDay(),
+        shiftName: getShiftName(employee),
+        attendanceMode: "employee_login",
       });
     }
 
     attendance.punchIn = new Date();
+    attendance.punchInSource = "employee_login";
+    attendance.status = "present";
 
     await attendance.save();
 
@@ -209,141 +284,90 @@ exports.employeePunchIn = async (req, res) => {
     });
   }
 };
-// ======================================================
+
 // EMPLOYEE PUNCH OUT
-// ======================================================
-
-
-
-
-
 exports.employeePunchOut = async (req, res) => {
-
   try {
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
-
-      userId: req.user.id,
-
+      userId,
       companyId: req.user.companyId,
-
     });
 
-
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
 
     const attendanceDate = getISTDateString();
 
-
-
     const attendance = await Attendance.findOne({
-
       companyId: req.user.companyId,
-
       employeeId: employee._id,
-
       attendanceDate,
-
     });
 
-
-
-    if (!attendance) {
-
-      return res.status(404).json({
-
+    if (!attendance || !attendance.punchIn) {
+      return res.status(400).json({
         success: false,
-
-        message: "Attendance not found",
-
+        message: "Punch in first",
       });
-
     }
-
-
 
     if (attendance.punchOut) {
-
       return res.status(400).json({
-
         success: false,
-
         message: "Already punched out",
-
       });
-
     }
 
-
-
-    const activeBreak =
-
-      attendance.breaks[attendance.breaks.length - 1];
-
-
+    const activeBreak = attendance.breaks[attendance.breaks.length - 1];
 
     if (activeBreak && !activeBreak.breakOut) {
-
       activeBreak.breakOut = new Date();
-
-
-
       activeBreak.minutes = 60;
-
-
-
-      activeBreak.source =
-
-        "auto_closed_default_60_min";
-
+      activeBreak.source = "auto_closed_default_60_min";
     }
 
-
-
     attendance.punchOut = new Date();
-
-
+    attendance.punchOutSource = "employee_login";
 
     calculateAttendance(attendance);
 
-
-
     await attendance.save();
 
-
-
     res.status(200).json({
-
       success: true,
-
       message: "Punch out successful",
-
       attendance,
-
     });
-
   } catch (error) {
-
     res.status(500).json({
-
       success: false,
-
       message: error.message,
-
     });
-
   }
-
 };
-// ======================================================
-// START BREAK
-// ======================================================
 
+// START BREAK
 exports.startBreak = async (req, res) => {
   try {
+    const userId = getUserId(req);
+
     const employee = await Employee.findOne({
-      userId: req.user.id,
+      userId,
       companyId: req.user.companyId,
     });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
 
     const attendanceDate = getISTDateString();
 
@@ -353,15 +377,21 @@ exports.startBreak = async (req, res) => {
       attendanceDate,
     });
 
-    if (!attendance) {
-      return res.status(404).json({
+    if (!attendance || !attendance.punchIn) {
+      return res.status(400).json({
         success: false,
-        message: "Attendance not found",
+        message: "Punch in first",
       });
     }
 
-    const lastBreak =
-      attendance.breaks[attendance.breaks.length - 1];
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched out",
+      });
+    }
+
+    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
 
     if (lastBreak && !lastBreak.breakOut) {
       return res.status(400).json({
@@ -372,6 +402,7 @@ exports.startBreak = async (req, res) => {
 
     attendance.breaks.push({
       breakIn: new Date(),
+      source: "employee_login",
     });
 
     await attendance.save();
@@ -379,6 +410,7 @@ exports.startBreak = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Break started",
+      attendance,
     });
   } catch (error) {
     res.status(500).json({
@@ -388,16 +420,22 @@ exports.startBreak = async (req, res) => {
   }
 };
 
-// ======================================================
 // END BREAK
-// ======================================================
-
 exports.endBreak = async (req, res) => {
   try {
+    const userId = getUserId(req);
+
     const employee = await Employee.findOne({
-      userId: req.user.id,
+      userId,
       companyId: req.user.companyId,
     });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
 
     const attendanceDate = getISTDateString();
 
@@ -407,8 +445,14 @@ exports.endBreak = async (req, res) => {
       attendanceDate,
     });
 
-    const lastBreak =
-      attendance.breaks[attendance.breaks.length - 1];
+    if (!attendance) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance not found",
+      });
+    }
+
+    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
 
     if (!lastBreak || lastBreak.breakOut) {
       return res.status(400).json({
@@ -418,17 +462,16 @@ exports.endBreak = async (req, res) => {
     }
 
     lastBreak.breakOut = new Date();
+    lastBreak.minutes = minutesDiff(lastBreak.breakIn, lastBreak.breakOut);
 
-    lastBreak.minutes = Math.floor(
-      (lastBreak.breakOut - lastBreak.breakIn) /
-        60000
-    );
+    calculateAttendance(attendance);
 
     await attendance.save();
 
     res.status(200).json({
       success: true,
       message: "Break ended",
+      attendance,
     });
   } catch (error) {
     res.status(500).json({
@@ -438,12 +481,347 @@ exports.endBreak = async (req, res) => {
   }
 };
 
-// ======================================================
-// GET ATTENDANCE
-// ======================================================
-// ======================================================
+// DAY-WISE ATTENDANCE REPORT
+exports.getAttendance = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    const { date, employeeId } = req.query;
+
+    // If date not passed, use today IST date
+    const selectedDate = date || getISTDateString();
+
+    const { start, end } = getDateRange(selectedDate);
+
+    const employeeFilter = {
+      companyId,
+      status: "active",
+    };
+
+    if (employeeId) {
+      employeeFilter._id = employeeId;
+    }
+
+    const employees = await Employee.find(employeeFilter)
+      .select(
+        "fullName employeeCode email salary role departmentId designationId shiftId"
+      )
+      .populate("departmentId", "name")
+      .populate("designationId", "name")
+      .populate("shiftId", "shiftName name")
+      .lean();
+
+    const attendanceRecords = await Attendance.find({
+      companyId,
+      date: { $gte: start, $lte: end },
+    }).lean();
+
+    const leaveRecords = await Leave.find({
+      companyId,
+      status: "approved",
+      fromDate: { $lte: end },
+      toDate: { $gte: start },
+    }).lean();
+
+    const permissionRecords = await PermissionRequest.find({
+      companyId,
+      status: "approved",
+      permissionDate: { $gte: start, $lte: end },
+    }).lean();
+
+    const attendanceMap = {};
+    attendanceRecords.forEach((item) => {
+      attendanceMap[item.employeeId.toString()] = item;
+    });
+
+    const leaveMap = {};
+    leaveRecords.forEach((item) => {
+      leaveMap[item.employeeId.toString()] = item;
+    });
+
+    const permissionMap = {};
+    permissionRecords.forEach((item) => {
+      permissionMap[item.employeeId.toString()] = item;
+    });
+
+    const attendance = employees.map((emp) => {
+      const empId = emp._id.toString();
+
+      const attendanceData = attendanceMap[empId];
+      const leave = leaveMap[empId];
+      const permission = permissionMap[empId];
+
+      let status = "absent";
+
+      if (attendanceData?.status) {
+        status = attendanceData.status;
+      } else if (leave) {
+        status = "leave";
+      }
+
+      const breakDetails = calculateBreakDetails(attendanceData);
+
+      const lateMinutes = attendanceData?.punchIn
+        ? calculateLateMinutes(selectedDate, attendanceData.punchIn)
+        : 0;
+
+      return {
+        employeeId: emp._id,
+        employeeCode: emp.employeeCode,
+        employeeName: emp.fullName,
+        email: emp.email,
+        role: emp.role,
+        department: emp.departmentId?.name || "",
+        designation: emp.designationId?.name || "",
+        shiftName:
+          attendanceData?.shiftName ||
+          emp.shiftId?.shiftName ||
+          emp.shiftId?.name ||
+          "Day Shift",
+
+        date: selectedDate,
+        status,
+
+        punchIn: attendanceData?.punchIn || null,
+        punchOut: attendanceData?.punchOut || null,
+
+        checkInTime: formatTime(attendanceData?.punchIn),
+        checkOutTime: formatTime(attendanceData?.punchOut),
+
+        workingMinutes: attendanceData?.workingMinutes || 0,
+        totalBreakMinutes: attendanceData?.totalBreakMinutes || 0,
+
+        break: breakDetails,
+
+        late: {
+          isLate: lateMinutes > 0,
+          lateMinutes,
+        },
+
+        permission: permission
+          ? {
+              permissionId: permission._id,
+              fromTime: permission.fromTime,
+              toTime: permission.toTime,
+              minutes: permission.minutes,
+              reason: permission.reason,
+            }
+          : null,
+
+        leave: leave
+          ? {
+              leaveId: leave._id,
+              leaveType: leave.leaveType,
+              fromDate: leave.fromDate,
+              toDate: leave.toDate,
+              reason: leave.reason,
+            }
+          : null,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      date: selectedDate,
+      count: attendance.length,
+      summary: {
+        totalEmployees: attendance.length,
+        present: attendance.filter((x) => x.status === "present").length,
+        halfDay: attendance.filter((x) => x.status === "half_day").length,
+        leave: attendance.filter((x) => x.status === "leave").length,
+        absent: attendance.filter((x) => x.status === "absent").length,
+        late: attendance.filter((x) => x.late.isLate).length,
+        permission: attendance.filter((x) => x.permission).length,
+        extraBreakTaken: attendance.filter(
+          (x) => x.break.extraBreakMinutes > 0
+        ).length,
+      },
+      attendance,
+    });
+  } catch (error) {
+    console.log("GET ATTENDANCE ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// MONTHLY SALARY REPORT
+exports.getMonthlyAttendanceSalaryReport = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    const { month, year, employeeId } = req.query;
+
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        message: "month and year are required",
+      });
+    }
+
+    const { start, end } = getMonthRange(Number(month), Number(year));
+
+    const employeeFilter = {
+      companyId,
+      status: "active",
+    };
+
+    if (employeeId) {
+      employeeFilter._id = employeeId;
+    }
+
+    const employees = await Employee.find(employeeFilter)
+      .select("fullName employeeCode email salary role shiftId")
+      .populate("shiftId", "shiftName name")
+      .lean();
+
+    const report = [];
+
+    for (const emp of employees) {
+      const attendanceRecords = await Attendance.find({
+        companyId,
+        employeeId: emp._id,
+        date: { $gte: start, $lte: end },
+      }).lean();
+
+      const approvedLeaves = await Leave.countDocuments({
+        companyId,
+        employeeId: emp._id,
+        status: "approved",
+        fromDate: { $lte: end },
+        toDate: { $gte: start },
+      });
+
+      const permissions = await PermissionRequest.find({
+        companyId,
+        employeeId: emp._id,
+        status: "approved",
+        permissionDate: { $gte: start, $lte: end },
+      }).lean();
+
+      const shiftName = emp.shiftId?.shiftName || emp.shiftId?.name || "Day Shift";
+
+      const isNightShift = shiftName.toLowerCase().includes("night");
+
+      const totalWorkingDays = isNightShift ? 22 : 24;
+
+      const presentDays = attendanceRecords.filter(
+        (item) => item.status === "present"
+      ).length;
+
+      const halfDays = attendanceRecords.filter(
+        (item) => item.status === "half_day"
+      ).length;
+
+      const salaryDays = presentDays + halfDays * 0.5;
+
+      const absentDays = Math.max(
+        0,
+        totalWorkingDays - salaryDays - approvedLeaves
+      );
+
+      let totalLateMinutes = 0;
+      let totalExtraBreakMinutes = 0;
+      let totalPermissionMinutes = 0;
+
+      attendanceRecords.forEach((item) => {
+        totalLateMinutes += calculateLateMinutes(
+          item.attendanceDate,
+          item.punchIn
+        );
+
+        const breakDetails = calculateBreakDetails(item);
+        totalExtraBreakMinutes += breakDetails.extraBreakMinutes;
+      });
+
+      permissions.forEach((item) => {
+        totalPermissionMinutes += item.minutes || 0;
+      });
+
+      const monthlySalary = Number(emp.salary || 0);
+      const perDaySalary = monthlySalary / totalWorkingDays;
+      const perMinuteSalary = perDaySalary / 8 / 60;
+
+      const extraBreakDeduction = perMinuteSalary * totalExtraBreakMinutes;
+
+      let grossSalary = perDaySalary * salaryDays;
+      grossSalary = grossSalary - extraBreakDeduction;
+
+      const basicSalary = isNightShift ? grossSalary * 0.4 : grossSalary * 0.5;
+
+      const pfDeduction = basicSalary * 0.12;
+      const esiDeduction = grossSalary <= 21000 ? grossSalary * 0.0075 : 0;
+
+      const totalDeduction = pfDeduction + esiDeduction;
+      const netSalary = grossSalary - totalDeduction;
+
+      report.push({
+        employeeId: emp._id,
+        employeeCode: emp.employeeCode,
+        employeeName: emp.fullName,
+        email: emp.email,
+        role: emp.role,
+        shiftName,
+
+        month: Number(month),
+        year: Number(year),
+
+        totalWorkingDays,
+        presentDays,
+        halfDays,
+        leaveDays: approvedLeaves,
+        absentDays,
+
+        permission: {
+          allowedMonthlyMinutes: 120,
+          usedMinutes: totalPermissionMinutes,
+          remainingMinutes: Math.max(0, 120 - totalPermissionMinutes),
+        },
+
+        late: {
+          totalLateMinutes,
+        },
+
+        break: {
+          allowedDailyMinutes: 60,
+          totalExtraBreakMinutes,
+          extraBreakDeduction: roundAmount(extraBreakDeduction),
+        },
+
+        salary: {
+          monthlySalary: roundAmount(monthlySalary),
+          perDaySalary: roundAmount(perDaySalary),
+          salaryDays,
+          grossSalary: roundAmount(grossSalary),
+          basicSalary: roundAmount(basicSalary),
+          pfDeduction: roundAmount(pfDeduction),
+          esiDeduction: roundAmount(esiDeduction),
+          totalDeduction: roundAmount(totalDeduction),
+          netSalary: roundAmount(netSalary),
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      month: Number(month),
+      year: Number(year),
+      count: report.length,
+      report,
+    });
+  } catch (error) {
+    console.log("MONTHLY ATTENDANCE SALARY REPORT ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
 // GOOGLE PUNCH IN
-// ======================================================
 
 exports.googlePunchIn = async (req, res) => {
   try {
@@ -518,10 +896,8 @@ exports.googlePunchIn = async (req, res) => {
   }
 };
 
-// ======================================================
-// GOOGLE PUNCH OUT
-// ======================================================
 
+// GOOGLE PUNCH OUT
 exports.googlePunchOut = async (req, res) => {
   try {
     // ==========================================
@@ -591,10 +967,8 @@ exports.googlePunchOut = async (req, res) => {
   }
 };
 
-// ======================================================
-// BIOMETRIC PUNCH IN
-// ======================================================
 
+// BIOMETRIC PUNCH IN
 exports.biometricPunchIn = async (req, res) => {
   try {
     const { employeeCode, biometricUserId } =
@@ -686,10 +1060,8 @@ exports.biometricPunchIn = async (req, res) => {
   }
 };
 
-// ======================================================
-// BIOMETRIC PUNCH OUT
-// ======================================================
 
+// BIOMETRIC PUNCH OUT
 exports.biometricPunchOut = async (req, res) => {
   try {
     const { employeeCode, biometricUserId } =
@@ -776,58 +1148,58 @@ exports.biometricPunchOut = async (req, res) => {
     });
   }
 };
-exports.getAttendance = async (req, res) => {
-  try {
-    const filter = {
-      companyId: req.user.companyId,
-    };
+// exports.getAttendance = async (req, res) => {
+//   try {
+//     const filter = {
+//       companyId: req.user.companyId,
+//     };
 
-    // ==========================================
-    // FILTER BY EMPLOYEE
-    // ==========================================
+//     // ==========================================
+//     // FILTER BY EMPLOYEE
+//     // ==========================================
 
-    if (req.query.employeeId) {
-      filter.employeeId = req.query.employeeId;
-    }
+//     if (req.query.employeeId) {
+//       filter.employeeId = req.query.employeeId;
+//     }
 
-    // ==========================================
-    // FILTER BY DATE
-    // ==========================================
+//     // ==========================================
+//     // FILTER BY DATE
+//     // ==========================================
 
-    if (req.query.date) {
-      const start = new Date(req.query.date);
-      start.setHours(0, 0, 0, 0);
+//     if (req.query.date) {
+//       const start = new Date(req.query.date);
+//       start.setHours(0, 0, 0, 0);
 
-      const end = new Date(req.query.date);
-      end.setHours(23, 59, 59, 999);
+//       const end = new Date(req.query.date);
+//       end.setHours(23, 59, 59, 999);
 
-      filter.date = {
-        $gte: start,
-        $lte: end,
-      };
-    }
+//       filter.date = {
+//         $gte: start,
+//         $lte: end,
+//       };
+//     }
 
-    const attendance = await Attendance.find(filter)
-      .populate(
-        "employeeId",
-        "fullName employeeCode department designation"
-      )
-      .sort({ date: -1 });
+//     const attendance = await Attendance.find(filter)
+//       .populate(
+//         "employeeId",
+//         "fullName employeeCode department designation"
+//       )
+//       .sort({ date: -1 });
 
-    res.json({
-      success: true,
-      count: attendance.length,
-      attendance,
-    });
-  } catch (error) {
-    console.log("GET ATTENDANCE ERROR:", error);
+//     res.json({
+//       success: true,
+//       count: attendance.length,
+//       attendance,
+//     });
+//   } catch (error) {
+//     console.log("GET ATTENDANCE ERROR:", error);
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 
 // ATTENDANCE CALENDAR VIEW
 

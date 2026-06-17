@@ -38,6 +38,6 @@ app.use("/api/industry-types", require("./src/routes/industryTypeRoutes"));
 app.use("/api/clients",require("./src/routes/clientRoutes"));
 app.use("/api/onboarding-documents",require("./src/routes/onboardingDocumentRoutes"));
 app.use("/api/holiday",require("./src/routes/holidayRoutes"));
-
+app.use("/api/attendance-requests",require("./src/routes/attendanceRequestRoutes"));
 module.exports = app;
 
