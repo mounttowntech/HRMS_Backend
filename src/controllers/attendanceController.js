@@ -487,8 +487,38 @@ exports.getAttendance = async (req, res) => {
     const companyId = req.user.companyId;
     const { date, employeeId } = req.query;
 
-    // If date not passed, use today IST date
     const selectedDate = date || getISTDateString();
+    const todayDate = getISTDateString();
+
+    const isValidDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate);
+
+    if (!isValidDateFormat) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use YYYY-MM-DD",
+        attendance: [],
+      });
+    }
+
+    if (selectedDate > todayDate) {
+      return res.status(200).json({
+        success: true,
+        date: selectedDate,
+        count: 0,
+        summary: {
+          totalEmployees: 0,
+          working: 0,
+          present: 0,
+          halfDay: 0,
+          leave: 0,
+          absent: 0,
+          late: 0,
+          permission: 0,
+          extraBreakTaken: 0,
+        },
+        attendance: [],
+      });
+    }
 
     const { start, end } = getDateRange(selectedDate);
 
@@ -505,27 +535,57 @@ exports.getAttendance = async (req, res) => {
       .select(
         "fullName employeeCode email salary role departmentId designationId shiftId"
       )
-      .populate("departmentId", "name")
-      .populate("designationId", "name")
+      .populate("departmentId", "name departmentName")
+      .populate("designationId", "name designationName")
       .populate("shiftId", "shiftName name")
       .lean();
 
+    if (!employees.length) {
+      return res.status(200).json({
+        success: true,
+        date: selectedDate,
+        count: 0,
+        summary: {
+          totalEmployees: 0,
+          working: 0,
+          present: 0,
+          halfDay: 0,
+          leave: 0,
+          absent: 0,
+          late: 0,
+          permission: 0,
+          extraBreakTaken: 0,
+        },
+        attendance: [],
+      });
+    }
+
     const attendanceRecords = await Attendance.find({
       companyId,
-      date: { $gte: start, $lte: end },
+      date: {
+        $gte: start,
+        $lte: end,
+      },
     }).lean();
 
     const leaveRecords = await Leave.find({
       companyId,
       status: "approved",
-      fromDate: { $lte: end },
-      toDate: { $gte: start },
+      fromDate: {
+        $lte: end,
+      },
+      toDate: {
+        $gte: start,
+      },
     }).lean();
 
     const permissionRecords = await PermissionRequest.find({
       companyId,
       status: "approved",
-      permissionDate: { $gte: start, $lte: end },
+      permissionDate: {
+        $gte: start,
+        $lte: end,
+      },
     }).lean();
 
     const attendanceMap = {};
@@ -552,10 +612,12 @@ exports.getAttendance = async (req, res) => {
 
       let status = "absent";
 
-      if (attendanceData?.status) {
-        status = attendanceData.status;
-      } else if (leave) {
+      if (leave) {
         status = "leave";
+      } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
+        status = "working";
+      } else if (attendanceData?.status) {
+        status = attendanceData.status;
       }
 
       const breakDetails = calculateBreakDetails(attendanceData);
@@ -570,8 +632,17 @@ exports.getAttendance = async (req, res) => {
         employeeName: emp.fullName,
         email: emp.email,
         role: emp.role,
-        department: emp.departmentId?.name || "",
-        designation: emp.designationId?.name || "",
+
+        department:
+          emp.departmentId?.departmentName ||
+          emp.departmentId?.name ||
+          "",
+
+        designation:
+          emp.designationId?.designationName ||
+          emp.designationId?.name ||
+          "",
+
         shiftName:
           attendanceData?.shiftName ||
           emp.shiftId?.shiftName ||
@@ -581,8 +652,8 @@ exports.getAttendance = async (req, res) => {
         date: selectedDate,
         status,
 
-        punchIn: attendanceData?.punchIn || null,
-        punchOut: attendanceData?.punchOut || null,
+        punchInDateTime: attendanceData?.punchIn || null,
+        punchOutDateTime: attendanceData?.punchOut || null,
 
         checkInTime: formatTime(attendanceData?.punchIn),
         checkOutTime: formatTime(attendanceData?.punchOut),
@@ -619,22 +690,25 @@ exports.getAttendance = async (req, res) => {
       };
     });
 
+    const summary = {
+      totalEmployees: attendance.length,
+      working: attendance.filter((x) => x.status === "working").length,
+      present: attendance.filter((x) => x.status === "present").length,
+      halfDay: attendance.filter((x) => x.status === "half_day").length,
+      leave: attendance.filter((x) => x.status === "leave").length,
+      absent: attendance.filter((x) => x.status === "absent").length,
+      late: attendance.filter((x) => x.late.isLate).length,
+      permission: attendance.filter((x) => x.permission).length,
+      extraBreakTaken: attendance.filter(
+        (x) => x.break.extraBreakMinutes > 0
+      ).length,
+    };
+
     res.status(200).json({
       success: true,
       date: selectedDate,
-      count: attendance.length,
-      summary: {
-        totalEmployees: attendance.length,
-        present: attendance.filter((x) => x.status === "present").length,
-        halfDay: attendance.filter((x) => x.status === "half_day").length,
-        leave: attendance.filter((x) => x.status === "leave").length,
-        absent: attendance.filter((x) => x.status === "absent").length,
-        late: attendance.filter((x) => x.late.isLate).length,
-        permission: attendance.filter((x) => x.permission).length,
-        extraBreakTaken: attendance.filter(
-          (x) => x.break.extraBreakMinutes > 0
-        ).length,
-      },
+      count: 0,
+      summary,
       attendance,
     });
   } catch (error) {
@@ -643,6 +717,7 @@ exports.getAttendance = async (req, res) => {
     res.status(500).json({
       success: false,
       message: error.message,
+      attendance: [],
     });
   }
 };
