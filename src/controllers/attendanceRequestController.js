@@ -78,15 +78,27 @@ exports.createAttendanceRequest = async (req, res) => {
       });
     }
 
+    // if (
+    //   ["forgot_break_start", "break_correction"].includes(requestType) &&
+    //   (!breakIn || !breakOut)
+    // ) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "breakIn and breakOut are required",
+    //   });
+    // }
+
     if (
-      ["forgot_break_start", "break_correction"].includes(requestType) &&
-      (!breakIn || !breakOut)
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "breakIn and breakOut are required",
-      });
-    }
+  requestType === "forgot_break_start" &&
+  !breakIn
+) {
+  return res.status(400).json({
+    success: false,
+    message: "breakIn is required",
+  });
+}
+
+
 
     if (requestType === "forgot_break_end" && !breakOut) {
       return res.status(400).json({
@@ -94,6 +106,16 @@ exports.createAttendanceRequest = async (req, res) => {
         message: "breakOut is required",
       });
     }
+
+    if (
+  requestType === "break_correction" &&
+  (!breakIn || !breakOut)
+) {
+  return res.status(400).json({
+    success: false,
+    message: "breakIn and breakOut are required",
+  });
+}
 
     const existingPending = await AttendanceRequest.findOne({
       companyId: req.user.companyId,
