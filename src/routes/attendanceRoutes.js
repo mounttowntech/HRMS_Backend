@@ -1,65 +1,89 @@
 const express = require("express");
 const router = express.Router();
-
-const attendanceController = require("../controllers/attendanceController");
-const { verifyToken ,allowRoles } = require("../middleware/authMiddleware");
+const {employeePunchIn, employeePunchOut,startBreak,endBreak,getAttendance,getMonthlyAttendanceSalaryReport,googlePunchIn,googlePunchOut,biometricPunchIn,biometricPunchOut,getAttendanceCalendarView,getAttendanceByUserId} = require("../controllers/attendanceController");
+const {
+  verifyToken,
+  allowRoles,
+} = require("../middleware/authMiddleware");
 
 router.post(
-  "/employee/punch-in",
+  "/punch-in",
   verifyToken,
-  attendanceController.employeePunchIn
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  employeePunchIn
 );
 
 router.post(
-  "/employee/punch-out",
+  "/punch-out",
   verifyToken,
-  attendanceController.employeePunchOut
-);
-
-router.post(
-  "/google/punch-in",
-  verifyToken,
-  attendanceController.googlePunchIn
-);
-
-router.post(
-  "/google/punch-out",
-  verifyToken,
-  attendanceController.googlePunchOut
-);
-
-router.post(
-  "/biometric/punch-in",
-  verifyToken,
-  attendanceController.biometricPunchIn
-);
-
-router.post(
-  "/biometric/punch-out",
-  verifyToken,
-  attendanceController.biometricPunchOut
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  employeePunchOut
 );
 
 router.post(
   "/break/start",
   verifyToken,
-  attendanceController.startBreak
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  startBreak
 );
 
 router.post(
   "/break/end",
   verifyToken,
-  attendanceController.endBreak
+  allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
+  endBreak
 );
 
-router.get("/all", verifyToken, attendanceController.getAttendance);
 
+
+router.get(
+  "/monthly-salary-report",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  getMonthlyAttendanceSalaryReport
+);
+
+
+
+
+router.post(
+  "/google/punch-in",
+  verifyToken,
+  googlePunchIn
+);
+
+router.post(
+  "/google/punch-out",
+  verifyToken,
+  googlePunchOut
+);
+
+router.post(
+  "/biometric/punch-in",
+  verifyToken,
+  biometricPunchIn
+);
+
+router.post(
+  "/biometric/punch-out",
+  verifyToken,
+ biometricPunchOut
+);
+
+
+
+router.get(
+  "/all",
+  verifyToken,
+  allowRoles("admin", "hr", "employer", "teamlead", "projectmanager"),
+  getAttendance
+);
 
 router.get(
   "/calendar-view",
   verifyToken,
   allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
-  attendanceController.getAttendanceCalendarView
+ getAttendanceCalendarView
 );
 
 
@@ -67,6 +91,6 @@ router.get(
   "/user-daily/:employeeId",
   verifyToken,
   allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
-  attendanceController.getAttendanceByUserId
+ getAttendanceByUserId
 );
 module.exports = router;

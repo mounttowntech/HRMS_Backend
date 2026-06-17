@@ -16,7 +16,7 @@ const { verifyToken , allowRoles } = require("../middleware/authMiddleware");
 router.post(
   "/create",
   verifyToken,
-  allowRoles("admin"),
+  allowRoles("admin", "hr", "employee"),
   createCompany
 );
 
@@ -40,7 +40,7 @@ router.get(
 router.put(
   "/update/:id",
   verifyToken,
-  allowRoles("admin"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   updateCompany
 );
 
@@ -49,7 +49,7 @@ router.put(
 router.delete(
   "/delete/:id",
   verifyToken,
-  allowRoles("admin"),
+  allowRoles("admin", "hr", "employee","teamlead","projectmanager"),
   deleteCompany
 );
 

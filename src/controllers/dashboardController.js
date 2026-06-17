@@ -375,7 +375,7 @@ exports.getTeamLeadDashboard = async (req, res) => {
 
     const members = await Employee.find({
       companyId,
-      reportingManager: teamLeadId,
+      projectManager: teamLeadId,
     })
       .populate("departmentId", "name")
       .select("fullName employeeCode departmentId status")

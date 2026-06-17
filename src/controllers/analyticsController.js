@@ -43,7 +43,7 @@ exports.teamAttendancePercentage = async (req, res) => {
 
     const team = await Employee.find({
       companyId,
-      reportingManager: req.user.employeeId,
+      projectManager: req.user.employeeId,
     });
 
     const employeeIds = team.map((emp) => emp._id);

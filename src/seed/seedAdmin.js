@@ -3,7 +3,9 @@ const mongoose = require("mongoose");
 const Company = require("../models/Company");
 const User = require("../models/User");
 (async () => {
-  await mongoose.connect(process.env.MONGODB_URI);
+  const mongoURI = process.env.MONGODB_ATLAS || process.env.MONGODB_URI;
+
+await mongoose.connect(mongoURI);
   let company = await Company.findOne({ email: "admin@hrms.com" });
   if (!company)
     company = await Company.create({

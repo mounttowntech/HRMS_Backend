@@ -5,7 +5,7 @@ const Payroll = require("../models/Payroll");
 const JobPost = require("../models/JobPost");
 const Candidate = require("../models/Candidate");
 
-const { percentage, getISTMonthRange } = require("../utils/dashboardUtils");
+const { percentage, getISTMonthRange } = require("../utils/dashboardutils");
 
 exports.getReportsSummary = async (req, res) => {
   try {
