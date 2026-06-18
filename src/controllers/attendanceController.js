@@ -15,6 +15,7 @@ const {
   calculateAttendance,
   calculateLateMinutes,
 } = require("../utils/attendanceCalculator");
+
 const {
   getAttendanceDateByShift,
 } = require("../utils/shiftAttendanceDate");
@@ -223,18 +224,15 @@ const roundAmount = (amount) => {
   return Number((amount || 0).toFixed(2));
 };
 
-// EMPLOYEE PUNCH IN
 exports.employeePunchIn = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
       status: "active",
-    })
-      .populate("shiftId", "shiftName name")
-      .lean();
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -243,12 +241,7 @@ exports.employeePunchIn = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     let attendance = await Attendance.findOne({
@@ -277,6 +270,7 @@ exports.employeePunchIn = async (req, res) => {
 
     attendance.punchIn = new Date();
     attendance.punchInSource = "employee_login";
+    attendance.shiftName = shiftName;
     attendance.status = "working";
 
     await attendance.save();
@@ -294,10 +288,9 @@ exports.employeePunchIn = async (req, res) => {
   }
 };
 
-// EMPLOYEE PUNCH OUT
 exports.employeePunchOut = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
@@ -311,12 +304,7 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
@@ -347,11 +335,19 @@ exports.employeePunchOut = async (req, res) => {
       activeBreak.source = "auto_closed_default_60_min";
     }
 
-    attendance.shiftName = attendance.shiftName || shiftName;
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
+    attendance.shiftName = attendance.shiftName || shiftName;
 
     calculateAttendance(attendance);
+
+    attendance.lateMinutes = calculateLateMinutes(
+      attendance.attendanceDate,
+      attendance.punchIn,
+      attendance.shiftName
+    );
+
+    attendance.isLate = attendance.lateMinutes > 0;
 
     await attendance.save();
 
@@ -368,10 +364,9 @@ exports.employeePunchOut = async (req, res) => {
   }
 };
 
-// START BREAK
 exports.startBreak = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
@@ -385,12 +380,7 @@ exports.startBreak = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
@@ -442,10 +432,9 @@ exports.startBreak = async (req, res) => {
   }
 };
 
-// END BREAK
 exports.endBreak = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
@@ -459,12 +448,7 @@ exports.endBreak = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
