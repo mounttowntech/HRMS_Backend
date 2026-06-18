@@ -1,5 +1,8 @@
 const DEFAULT_BREAK_MINUTES = 60;
-const OFFICE_START = "09:30";
+
+const DAY_SHIFT_START = "09:30";
+const NIGHT_SHIFT_START = "19:00";
+
 const FULL_DAY_MINUTES = 480;
 const HALF_DAY_MINUTES = 240;
 
@@ -11,10 +14,15 @@ const getISTTime = (attendanceDate, time) => {
   return new Date(`${attendanceDate}T${time}:00+05:30`);
 };
 
-exports.calculateLateMinutes = (attendanceDate, punchIn) => {
+exports.calculateLateMinutes = (attendanceDate, punchIn, shiftName = "Day Shift") => {
   if (!punchIn) return 0;
 
-  const officeStart = getISTTime(attendanceDate, OFFICE_START);
+  const isNightShift = shiftName?.toLowerCase().includes("night");
+
+  const shiftStartTime = isNightShift ? NIGHT_SHIFT_START : DAY_SHIFT_START;
+
+  const officeStart = getISTTime(attendanceDate, shiftStartTime);
+
   const lateMinutes = exports.minutesDiff(officeStart, punchIn);
 
   return lateMinutes > 0 ? lateMinutes : 0;
@@ -58,7 +66,8 @@ exports.calculateAttendance = (attendance) => {
 
     attendance.lateMinutes = exports.calculateLateMinutes(
       attendance.attendanceDate,
-      attendance.punchIn
+      attendance.punchIn,
+      attendance.shiftName
     );
 
     attendance.isLate = attendance.lateMinutes > 0;
