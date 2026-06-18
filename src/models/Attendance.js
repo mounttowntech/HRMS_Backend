@@ -42,6 +42,12 @@ const attendanceSchema = new mongoose.Schema(
       required: true,
     },
 
+    shiftName: {
+      type: String,
+      enum: ["General Shift", "Night Shift"],
+      default: "General Shift",
+    },
+
     punchIn: {
       type: Date,
       default: null,
@@ -52,6 +58,16 @@ const attendanceSchema = new mongoose.Schema(
       default: null,
     },
 
+    punchInSource: {
+      type: String,
+      default: "",
+    },
+
+    punchOutSource: {
+      type: String,
+      default: "",
+    },
+
     breaks: [breakSchema],
 
     totalBreakMinutes: {
@@ -59,40 +75,41 @@ const attendanceSchema = new mongoose.Schema(
       default: 60,
     },
 
+    extraBreakMinutes: {
+      type: Number,
+      default: 0,
+    },
+
     workingMinutes: {
       type: Number,
       default: 0,
     },
 
+    lateMinutes: {
+      type: Number,
+      default: 0,
+    },
+
+    isLate: {
+      type: Boolean,
+      default: false,
+    },
+
     session: {
       type: String,
-      enum: [
-        "full_day",
-        "first_half",
-        "second_half",
-        "absent",
-      ],
+      enum: ["full_day", "half_day", "first_half", "second_half", "absent"],
       default: "absent",
     },
 
     status: {
       type: String,
-      enum: [
-        "present",
-        "half_day",
-        "absent",
-        "leave",
-      ],
+      enum: ["present", "half_day", "absent", "leave"],
       default: "absent",
     },
 
     attendanceMode: {
       type: String,
-      enum: [
-        "employee_login",
-        "biometric",
-        "google_signin",
-      ],
+      enum: ["employee_login", "biometric", "google_login", "regularization"],
       default: "employee_login",
     },
   },
@@ -108,7 +125,4 @@ attendanceSchema.index(
   { unique: true }
 );
 
-module.exports = mongoose.model(
-  "Attendance",
-  attendanceSchema
-);
+module.exports = mongoose.model("Attendance", attendanceSchema);

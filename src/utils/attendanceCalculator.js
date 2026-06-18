@@ -1,12 +1,26 @@
+const DEFAULT_BREAK_MINUTES = 60;
+const OFFICE_START = "09:30";
+const FULL_DAY_MINUTES = 480;
+const HALF_DAY_MINUTES = 240;
+
 exports.minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
 };
 
-exports.calculateAttendance = (attendance) => {
-  const DEFAULT_BREAK_MINUTES = 60;
-  const FULL_DAY_MINUTES = 480;
-  const HALF_DAY_MINUTES = 240;
+const getISTTime = (attendanceDate, time) => {
+  return new Date(`${attendanceDate}T${time}:00+05:30`);
+};
 
+exports.calculateLateMinutes = (attendanceDate, punchIn) => {
+  if (!punchIn) return 0;
+
+  const officeStart = getISTTime(attendanceDate, OFFICE_START);
+  const lateMinutes = exports.minutesDiff(officeStart, punchIn);
+
+  return lateMinutes > 0 ? lateMinutes : 0;
+};
+
+exports.calculateAttendance = (attendance) => {
   let actualBreakMinutes = 0;
 
   if (attendance.breaks?.length) {
@@ -26,6 +40,11 @@ exports.calculateAttendance = (attendance) => {
     actualBreakMinutes
   );
 
+  attendance.extraBreakMinutes =
+    actualBreakMinutes > DEFAULT_BREAK_MINUTES
+      ? actualBreakMinutes - DEFAULT_BREAK_MINUTES
+      : 0;
+
   if (attendance.punchIn && attendance.punchOut) {
     const totalMinutes = exports.minutesDiff(
       attendance.punchIn,
@@ -36,6 +55,13 @@ exports.calculateAttendance = (attendance) => {
       0,
       totalMinutes - attendance.totalBreakMinutes
     );
+
+    attendance.lateMinutes = exports.calculateLateMinutes(
+      attendance.attendanceDate,
+      attendance.punchIn
+    );
+
+    attendance.isLate = attendance.lateMinutes > 0;
 
     if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
       attendance.status = "present";
