@@ -15,6 +15,10 @@ const {
   calculateAttendance,
   calculateLateMinutes,
 } = require("../utils/attendanceCalculator");
+
+const {
+  getAttendanceDateByShift,
+} = require("../utils/shiftAttendanceDate");
 // ======================================================
 // DATE HELPERS
 // ======================================================
@@ -220,7 +224,6 @@ const roundAmount = (amount) => {
   return Number((amount || 0).toFixed(2));
 };
 
-// EMPLOYEE PUNCH IN
 exports.employeePunchIn = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -229,9 +232,7 @@ exports.employeePunchIn = async (req, res) => {
       userId,
       companyId: req.user.companyId,
       status: "active",
-    })
-      .populate("shiftId", "shiftName name")
-      .lean();
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -240,7 +241,8 @@ exports.employeePunchIn = async (req, res) => {
       });
     }
 
-    const attendanceDate = getISTDateString();
+    const shiftName = getShiftName(employee);
+    const attendanceDate = getAttendanceDateByShift(shiftName);
 
     let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
@@ -260,15 +262,16 @@ exports.employeePunchIn = async (req, res) => {
         companyId: req.user.companyId,
         employeeId: employee._id,
         attendanceDate,
-        date: getISTStartOfDay(),
-        shiftName: getShiftName(employee),
+        date: new Date(`${attendanceDate}T00:00:00+05:30`),
+        shiftName,
         attendanceMode: "employee_login",
       });
     }
 
     attendance.punchIn = new Date();
     attendance.punchInSource = "employee_login";
-    attendance.status = "present";
+    attendance.shiftName = shiftName;
+    attendance.status = "working";
 
     await attendance.save();
 
@@ -285,7 +288,6 @@ exports.employeePunchIn = async (req, res) => {
   }
 };
 
-// EMPLOYEE PUNCH OUT
 exports.employeePunchOut = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -293,7 +295,7 @@ exports.employeePunchOut = async (req, res) => {
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
-    });
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -302,7 +304,8 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    const attendanceDate = getISTDateString();
+    const shiftName = getShiftName(employee);
+    const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,
@@ -334,8 +337,17 @@ exports.employeePunchOut = async (req, res) => {
 
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
+    attendance.shiftName = attendance.shiftName || shiftName;
 
     calculateAttendance(attendance);
+
+    attendance.lateMinutes = calculateLateMinutes(
+      attendance.attendanceDate,
+      attendance.punchIn,
+      attendance.shiftName
+    );
+
+    attendance.isLate = attendance.lateMinutes > 0;
 
     await attendance.save();
 
@@ -352,7 +364,6 @@ exports.employeePunchOut = async (req, res) => {
   }
 };
 
-// START BREAK
 exports.startBreak = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -360,7 +371,7 @@ exports.startBreak = async (req, res) => {
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
-    });
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -369,7 +380,8 @@ exports.startBreak = async (req, res) => {
       });
     }
 
-    const attendanceDate = getISTDateString();
+    const shiftName = getShiftName(employee);
+    const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,
@@ -420,7 +432,6 @@ exports.startBreak = async (req, res) => {
   }
 };
 
-// END BREAK
 exports.endBreak = async (req, res) => {
   try {
     const userId = getUserId(req);
@@ -428,7 +439,7 @@ exports.endBreak = async (req, res) => {
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
-    });
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -437,7 +448,8 @@ exports.endBreak = async (req, res) => {
       });
     }
 
-    const attendanceDate = getISTDateString();
+    const shiftName = getShiftName(employee);
+    const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
       companyId: req.user.companyId,

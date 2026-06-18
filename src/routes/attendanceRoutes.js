@@ -7,14 +7,14 @@ const {
 } = require("../middleware/authMiddleware");
 
 router.post(
-  "/punch-in",
+  "/employee/punch-in",
   verifyToken,
   allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
   employeePunchIn
 );
 
 router.post(
-  "/punch-out",
+  "/employee/punch-out",
   verifyToken,
   allowRoles("employee", "teamlead", "projectmanager", "hr", "admin"),
   employeePunchOut
