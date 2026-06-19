@@ -193,7 +193,14 @@ exports.getAllNotifications = async (req, res) => {
       .populate("receiverId", "name userName email role")
       .sort({ createdAt: -1 })
       .lean();
-
+      const uniqueNotifications = Array.from(
+        new Map(
+          notifications.map((item) => [
+            item.referenceId?.toString(),
+            item,
+          ])
+        ).values()
+      );
     const formattedNotifications = uniqueNotifications.map((item) => ({
       ...item,
       timeAgo: getTimeAgo(item.createdAt),

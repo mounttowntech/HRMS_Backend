@@ -150,9 +150,9 @@ console.log("companyId:", req.user.companyId);
       senderId: userId,
       roles: notifyRoles,
       title: "New Leave Request",
-      message: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
+      message: `${emp.fullName} applied for ${leaveType} leave from ${new Date(fromDate).toLocaleDateString("en-GB")}  to  ${new Date(toDate).toLocaleDateString("en-GB")}.`,
       type: "leave_request",
-      referenceId: leave._id,
+      referenceId: leave._id,   
       referenceModel: "Leave",
     });
 
