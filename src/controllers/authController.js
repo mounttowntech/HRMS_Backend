@@ -515,14 +515,33 @@ exports.me = async (req, res) => {
     let user = await User.findById(req.user.id)
       .select("-password")
       .populate("companyId")
-      .populate("employeeId");
+      .populate({
+        path: "employeeId",
+        populate: [
+          {
+            path: "departmentId",
+            select: "name departmentName",
+          },
+          {
+            path: "designationId",
+            select: "name designationName",
+          },
+          {
+            path: "shiftId",
+            select: "shiftName name",
+          },
+        ],
+      });
 
     let employee = null;
 
     if (!user.employeeId) {
       employee = await Employee.findOne({
         userId: user._id,
-      });
+      })
+        .populate("departmentId", "name departmentName")
+        .populate("designationId", "name designationName")
+        .populate("shiftId", "shiftName name");
 
       if (employee) {
         user.employeeId = employee._id;
@@ -531,7 +550,7 @@ exports.me = async (req, res) => {
       }
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       user,
       employee,
