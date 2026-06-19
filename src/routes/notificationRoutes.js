@@ -20,10 +20,11 @@ router.post(
   allowRoles("admin", "hr", "teamlead","projectmanager"),
   c.createRoleNotification
 );
+
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr", "employer"),
+  allowRoles("admin", "hr", "employee"),
   c.getAllNotifications
 );
 router.get(
