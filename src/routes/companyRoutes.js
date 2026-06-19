@@ -16,7 +16,7 @@ const { verifyToken , allowRoles } = require("../middleware/authMiddleware");
 router.post(
   "/create",
   verifyToken,
-  allowRoles("admin", "hr", "employee"),
+  allowRoles("admin"),
   createCompany
 );
 

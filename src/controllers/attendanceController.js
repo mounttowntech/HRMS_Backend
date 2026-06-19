@@ -8,6 +8,7 @@ const PermissionRequest = require("../models/permissionRequest");
 const {
   getISTDateString,
   getISTStartOfDay,
+  formatISTDateTime,
 } = require("../utils/attendanceDate");
 
 const {
@@ -42,6 +43,15 @@ const getDateKey = (date) => {
 // const minutesDiff = (start, end) => {
 //   return Math.floor((new Date(end) - new Date(start)) / 60000);
 // };
+
+const getActiveAttendance = async (companyId, employeeId) => {
+  return await Attendance.findOne({
+    companyId,
+    employeeId,
+    punchIn: { $ne: null },
+    punchOut: null,
+  }).sort({ punchIn: -1 });
+};
 
 // ======================================================
 // CALCULATE ATTENDANCE
@@ -271,7 +281,7 @@ exports.employeePunchIn = async (req, res) => {
     attendance.punchIn = new Date();
     attendance.punchInSource = "employee_login";
     attendance.shiftName = shiftName;
-    attendance.status = "working";
+    attendance.status = "present";
 
     await attendance.save();
 
@@ -288,9 +298,85 @@ exports.employeePunchIn = async (req, res) => {
   }
 };
 
+// exports.employeePunchOut = async (req, res) => {
+//   try {
+//     const userId = getUserId(req);
+
+//     const employee = await Employee.findOne({
+//       userId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const shiftName = getShiftName(employee);
+//     const attendanceDate = getAttendanceDateByShift(shiftName);
+
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId: employee._id,
+//       attendanceDate,
+//     });
+
+//     if (!attendance || !attendance.punchIn) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Punch in first",
+//       });
+//     }
+
+//     if (attendance.punchOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Already punched out",
+//       });
+//     }
+
+//     const activeBreak = attendance.breaks[attendance.breaks.length - 1];
+
+//     if (activeBreak && !activeBreak.breakOut) {
+//       activeBreak.breakOut = new Date();
+//       activeBreak.minutes = 60;
+//       activeBreak.source = "auto_closed_default_60_min";
+//     }
+
+//     attendance.punchOut = new Date();
+//     attendance.punchOutSource = "employee_login";
+//     attendance.shiftName = attendance.shiftName || shiftName;
+
+//     calculateAttendance(attendance);
+
+//     attendance.lateMinutes = calculateLateMinutes(
+//       attendance.attendanceDate,
+//       attendance.punchIn,
+//       attendance.shiftName
+//     );
+
+//     attendance.isLate = attendance.lateMinutes > 0;
+
+//     await attendance.save();
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Punch out successful",
+//       attendance,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.employeePunchOut = async (req, res) => {
   try {
-    const userId = getUserId(req);
+    const userId = req.user?.userId || req.user?.id;
 
     const employee = await Employee.findOne({
       userId,
@@ -304,14 +390,31 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    const shiftName = getShiftName(employee);
-    const attendanceDate = getAttendanceDateByShift(shiftName);
+    const shiftName =
+      employee.shiftId?.shiftName ||
+      employee.shiftId?.name ||
+      employee.shiftType ||
+      "Day Shift";
 
-    const attendance = await Attendance.findOne({
+    // FIRST: find active open attendance
+    // This works for day shift and night shift
+    let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      attendanceDate,
-    });
+      punchIn: { $ne: null },
+      punchOut: null,
+    }).sort({ punchIn: -1 });
+
+    // SECOND: fallback by shift attendanceDate
+    if (!attendance) {
+      const attendanceDate = getAttendanceDateByShift(shiftName);
+
+      attendance = await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        attendanceDate,
+      });
+    }
 
     if (!attendance || !attendance.punchIn) {
       return res.status(400).json({
@@ -327,27 +430,25 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    const activeBreak = attendance.breaks[attendance.breaks.length - 1];
+    const activeBreak = attendance.breaks?.[attendance.breaks.length - 1];
 
     if (activeBreak && !activeBreak.breakOut) {
       activeBreak.breakOut = new Date();
-      activeBreak.minutes = 60;
-      activeBreak.source = "auto_closed_default_60_min";
+
+      activeBreak.minutes = Math.floor(
+        (activeBreak.breakOut - activeBreak.breakIn) / 60000
+      );
+
+      activeBreak.source = "auto_closed_on_punchout";
     }
 
+    attendance.shiftName = attendance.shiftName || shiftName;
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
-    attendance.shiftName = attendance.shiftName || shiftName;
+
+    console.log("Calculating attendance for punch out...",attendance);
 
     calculateAttendance(attendance);
-
-    attendance.lateMinutes = calculateLateMinutes(
-      attendance.attendanceDate,
-      attendance.punchIn,
-      attendance.shiftName
-    );
-
-    attendance.isLate = attendance.lateMinutes > 0;
 
     await attendance.save();
 
@@ -355,14 +456,88 @@ exports.employeePunchOut = async (req, res) => {
       success: true,
       message: "Punch out successful",
       attendance,
+      display: {
+        punchIn: formatISTDateTime(attendance?.punchIn),
+        punchOut: formatISTDateTime(attendance?.punchOut),
+      }
     });
   } catch (error) {
+    console.log("PUNCH OUT ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+// exports.startBreak = async (req, res) => {
+//   try {
+//     const userId = getUserId(req);
+
+//     const employee = await Employee.findOne({
+//       userId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const shiftName = getShiftName(employee);
+//     const attendanceDate = getAttendanceDateByShift(shiftName);
+
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId: employee._id,
+//       attendanceDate,
+//     });
+
+//     if (!attendance || !attendance.punchIn) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Punch in first",
+//       });
+//     }
+
+//     if (attendance.punchOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Already punched out",
+//       });
+//     }
+
+//     const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+
+//     if (lastBreak && !lastBreak.breakOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Break already started",
+//       });
+//     }
+
+//     attendance.breaks.push({
+//       breakIn: new Date(),
+//       source: "employee_login",
+//     });
+
+//     await attendance.save();
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Break started",
+//       attendance,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 
 exports.startBreak = async (req, res) => {
   try {
@@ -381,13 +556,25 @@ exports.startBreak = async (req, res) => {
     }
 
     const shiftName = getShiftName(employee);
-    const attendanceDate = getAttendanceDateByShift(shiftName);
 
-    const attendance = await Attendance.findOne({
+    // 1. Find active attendance first
+    let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      attendanceDate,
-    });
+      punchIn: { $ne: null },
+      punchOut: null,
+    }).sort({ punchIn: -1 });
+
+    // 2. Fallback by shift attendance date
+    if (!attendance) {
+      const attendanceDate = getAttendanceDateByShift(shiftName);
+
+      attendance = await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        attendanceDate,
+      });
+    }
 
     if (!attendance || !attendance.punchIn) {
       return res.status(400).json({
@@ -403,7 +590,7 @@ exports.startBreak = async (req, res) => {
       });
     }
 
-    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+    const lastBreak = attendance.breaks?.[attendance.breaks.length - 1];
 
     if (lastBreak && !lastBreak.breakOut) {
       return res.status(400).json({
@@ -419,18 +606,83 @@ exports.startBreak = async (req, res) => {
 
     await attendance.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Break started",
       attendance,
     });
   } catch (error) {
-    res.status(500).json({
+    console.log("START BREAK ERROR:", error);
+
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+// exports.endBreak = async (req, res) => {
+//   try {
+//     const userId = getUserId(req);
+
+//     const employee = await Employee.findOne({
+//       userId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const shiftName = getShiftName(employee);
+//     const attendanceDate = getAttendanceDateByShift(shiftName);
+
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId: employee._id,
+//       attendanceDate,
+//     });
+
+//     if (!attendance) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Attendance not found",
+//       });
+//     }
+
+//     const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+
+//     if (!lastBreak || lastBreak.breakOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No active break found",
+//       });
+//     }
+
+//     lastBreak.breakOut = new Date();
+//     lastBreak.minutes = minutesDiff(lastBreak.breakIn, lastBreak.breakOut);
+
+//     calculateAttendance(attendance);
+
+//     await attendance.save();
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Break ended",
+//       attendance,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// DAY-WISE ATTENDANCE REPORT
 
 exports.endBreak = async (req, res) => {
   try {
@@ -449,13 +701,25 @@ exports.endBreak = async (req, res) => {
     }
 
     const shiftName = getShiftName(employee);
-    const attendanceDate = getAttendanceDateByShift(shiftName);
 
-    const attendance = await Attendance.findOne({
+    // 1. Find active attendance first
+    let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      attendanceDate,
-    });
+      punchIn: { $ne: null },
+      punchOut: null,
+    }).sort({ punchIn: -1 });
+
+    // 2. Fallback by shift attendance date
+    if (!attendance) {
+      const attendanceDate = getAttendanceDateByShift(shiftName);
+
+      attendance = await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        attendanceDate,
+      });
+    }
 
     if (!attendance) {
       return res.status(404).json({
@@ -464,7 +728,14 @@ exports.endBreak = async (req, res) => {
       });
     }
 
-    const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched out",
+      });
+    }
+
+    const lastBreak = attendance.breaks?.[attendance.breaks.length - 1];
 
     if (!lastBreak || lastBreak.breakOut) {
       return res.status(400).json({
@@ -474,26 +745,31 @@ exports.endBreak = async (req, res) => {
     }
 
     lastBreak.breakOut = new Date();
-    lastBreak.minutes = minutesDiff(lastBreak.breakIn, lastBreak.breakOut);
+
+    lastBreak.minutes = minutesDiff(
+      lastBreak.breakIn,
+      lastBreak.breakOut
+    );
 
     calculateAttendance(attendance);
 
     await attendance.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Break ended",
       attendance,
     });
   } catch (error) {
-    res.status(500).json({
+    console.log("END BREAK ERROR:", error);
+
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
 
-// DAY-WISE ATTENDANCE REPORT
 exports.getAttendance = async (req, res) => {
   try {
     const companyId = req.user.companyId;
@@ -1622,108 +1898,463 @@ exports.getAttendanceCalendarView = async (req, res) => {
 
 
 // GET SINGLE USER ATTENDANCE - DAILY BASIS
-exports.getAttendanceByUserId = async (req, res) => {
+// exports.getAttendanceByUserId = async (req, res) => {
 
-  try {
+//   try {
 
-    const { employeeId } = req.params;
-
-
-
-    if (!employeeId) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message: "employeeId is required",
-
-      });
-
-    }
+//     const { employeeId } = req.params;
 
 
 
-    const start = new Date();
+//     if (!employeeId) {
 
-    start.setHours(0, 0, 0, 0);
+//       return res.status(400).json({
 
+//         success: false,
 
+//         message: "employeeId is required",
 
-    const end = new Date();
+//       });
 
-    end.setHours(23, 59, 59, 999);
-
-
-
-    const attendance = await Attendance.findOne({
-
-      companyId: req.user.companyId,
-
-      employeeId,
-
-      date: {
-
-        $gte: start,
-
-        $lte: end,
-
-      },
-
-    }).populate(
-
-      "employeeId",
-
-      "fullName employeeCode email departmentId designationId"
-
-    );
+//     }
 
 
 
-    if (!attendance) {
+//     const start = new Date();
 
-      return res.status(200).json({
-
-        success: true,
-
-        message: "Employee is absent today",
-
-        status: "absent",
-
-        attendance: null,
-
-      });
-
-    }
+//     start.setHours(0, 0, 0, 0);
 
 
 
-    res.status(200).json({
+//     const end = new Date();
 
-      success: true,
-
-      message: "Today attendance found",
-
-      status: attendance.status,
-
-      attendance,
-
-    });
-
-  } catch (error) {
-
-    console.log("GET TODAY ATTENDANCE ERROR:", error);
+//     end.setHours(23, 59, 59, 999);
 
 
 
-    res.status(500).json({
+//     const attendance = await Attendance.findOne({
 
-      success: false,
+//       companyId: req.user.companyId,
 
-      message: error.message,
+//       employeeId,
 
-    });
+//       date: {
 
+//         $gte: start,
+
+//         $lte: end,
+
+//       },
+
+//     }).populate(
+
+//       "employeeId",
+
+//       "fullName employeeCode email departmentId designationId"
+
+//     );
+
+
+
+//     if (!attendance) {
+
+//       return res.status(200).json({
+
+//         success: true,
+
+//         message: "Employee is absent today",
+
+//         status: "absent",
+
+//         attendance: null,
+
+//       });
+
+//     }
+
+
+
+//     res.status(200).json({
+
+//       success: true,
+
+//       message: "Today attendance found",
+
+//       status: attendance.status,
+
+//       attendance,
+
+//     });
+
+//   } catch (error) {
+
+//     console.log("GET TODAY ATTENDANCE ERROR:", error);
+
+
+
+//     res.status(500).json({
+
+//       success: false,
+
+//       message: error.message,
+
+//     });
+
+//   }
+
+// };
+
+// exports.getAttendanceByUserId = async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
+
+//     if (!employeeId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "employeeId is required",
+//       });
+//     }
+
+//     const today = getISTDateString();
+
+//     const yesterdayDate = new Date();
+//     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+//     const yesterday = yesterdayDate.toLocaleDateString("en-CA", {
+//       timeZone: "Asia/Kolkata",
+//     });
+
+//     // Check active attendance only for today/yesterday
+//     const activeAttendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId,
+//       attendanceDate: { $in: [today, yesterday] },
+//       punchIn: { $ne: null },
+//       punchOut: null,
+//     })
+//       .sort({ punchIn: -1 })
+//       .populate(
+//         "employeeId",
+//         "fullName employeeCode email departmentId designationId"
+//       );
+
+//     if (activeAttendance) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Active attendance found",
+//         status: activeAttendance.status,
+//         attendance: activeAttendance,
+//       });
+//     }
+
+//     // Check today's completed attendance
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId,
+//       attendanceDate: today,
+//     }).populate(
+//       "employeeId",
+//       "fullName employeeCode email departmentId designationId"
+//     );
+
+//     if (!attendance) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Employee is absent today",
+//         status: "absent",
+//         attendance: null,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Today attendance found",
+//       status: attendance.status,
+//       attendance,
+//     });
+//   } catch (error) {
+//     console.log("GET TODAY ATTENDANCE ERROR:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
+// exports.getAttendanceByUserId = async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
+
+//     if (!employeeId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "employeeId is required",
+//       });
+//     }
+
+//     const employee = await Employee.findOne({
+//       _id: employeeId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const shiftName =
+//       employee.shiftId?.shiftName ||
+//       employee.shiftId?.name ||
+//       employee.shiftType ||
+//       "Day Shift";
+
+//     const currentAttendanceDate = getAttendanceDateByShift(shiftName);
+
+//     const today = getISTDateString();
+
+//     const yesterdayDate = new Date();
+//     yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+//     const yesterday = yesterdayDate.toLocaleDateString("en-CA", {
+//       timeZone: "Asia/Kolkata",
+//     });
+
+//     // 1. Active attendance for today/yesterday only
+//     const activeAttendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId,
+//       attendanceDate: { $in: [today, yesterday] },
+//       punchIn: { $ne: null },
+//       punchOut: null,
+//     })
+//       .sort({ punchIn: -1 })
+//       .populate(
+//         "employeeId",
+//         "fullName employeeCode email departmentId designationId"
+//       );
+
+//     if (activeAttendance) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Active attendance found",
+//         status: activeAttendance.status,
+//         attendanceState: "checked_in",
+//         canPunchIn: false,
+//         canPunchOut: true,
+//         currentAttendanceDate,
+//         attendance: activeAttendance,
+//       });
+//     }
+
+//     // 2. Check current shift attendance date
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId,
+//       attendanceDate: currentAttendanceDate,
+//     }).populate(
+//       "employeeId",
+//       "fullName employeeCode email departmentId designationId"
+//     );
+
+//     if (!attendance) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No attendance for current shift",
+//         status: "not_started",
+//         attendanceState: "not_started",
+//         canPunchIn: true,
+//         canPunchOut: false,
+//         currentAttendanceDate,
+//         attendance: null,
+//       });
+//     }
+
+//     if (attendance.punchIn && attendance.punchOut) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Current shift attendance completed",
+//         status: attendance.status,
+//         attendanceState: "checked_out",
+//         canPunchIn: false,
+//         canPunchOut: false,
+//         currentAttendanceDate,
+//         attendance,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Current shift attendance found",
+//       status: attendance.status,
+//       attendanceState: "checked_in",
+//       canPunchIn: false,
+//       canPunchOut: true,
+//       currentAttendanceDate,
+//       attendance,
+//     });
+//   } catch (error) {
+//     console.log("GET TODAY ATTENDANCE ERROR:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+const getAttendanceUIState = (attendance) => {
+  // console.log("attendance", attendance);
+  if (!attendance || !attendance.punchIn) {
+    return {
+      attendanceState: "not_started",
+      canPunchIn: true,
+      canPunchOut: false,
+      canStartBreak: false,
+      canEndBreak: false,
+    };
   }
 
+  if (attendance.punchOut) {
+    return {
+      attendanceState: "checked_out",
+      canPunchIn: false,
+      canPunchOut: false,
+      canStartBreak: false,
+      canEndBreak: false,
+    };
+  }
+
+  const lastBreak = attendance.breaks?.[attendance.breaks.length - 1];
+
+  if (lastBreak?.breakIn && !lastBreak?.breakOut) {
+    return {
+      attendanceState: "on_break",
+      canPunchIn: false,
+      canPunchOut: true,
+      canStartBreak: false,
+      canEndBreak: true,
+    };
+  }
+
+  return {
+    attendanceState: "checked_in",
+    canPunchIn: false,
+    canPunchOut: true,
+    canStartBreak: true,
+    canEndBreak: false,
+  };
+};
+
+exports.getAttendanceByUserId = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeId is required",
+      });
+    }
+
+    const employee = await Employee.findOne({
+      _id: employeeId,
+      companyId: req.user.companyId,
+    }).populate("shiftId", "shiftName name shiftType startTime endTime");
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+console.log("empoyee_shift", employee.shiftId);
+    const shiftName =
+      employee.shiftId?.shiftName ||
+      employee.shiftId?.name ||
+      employee.shiftType ||
+      "Day Shift";
+
+    const currentAttendanceDate = getAttendanceDateByShift(shiftName);
+
+    const today = getISTDateString();
+
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+
+    const yesterday = yesterdayDate.toLocaleDateString("en-CA", {
+      timeZone: "Asia/Kolkata",
+    });
+
+    const activeAttendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId,
+      attendanceDate: { $in: [today, yesterday, currentAttendanceDate] },
+      punchIn: { $ne: null },
+      punchOut: null,
+    })
+      .sort({ punchIn: -1 })
+      .populate(
+        "employeeId",
+        "fullName employeeCode email departmentId designationId"
+      );
+
+    if (activeAttendance) {
+      const uiState = getAttendanceUIState(activeAttendance);
+
+      return res.status(200).json({
+        success: true,
+        message: "Active attendance found",
+        status: activeAttendance.status,
+        currentAttendanceDate,
+        attendance: activeAttendance,
+        ...uiState,
+      });
+    }
+
+    const attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId,
+      attendanceDate: currentAttendanceDate,
+    }).populate(
+      "employeeId",
+      "fullName employeeCode email departmentId designationId"
+    );
+
+    if (!attendance) {
+      const uiState = getAttendanceUIState(null);
+
+      return res.status(200).json({
+        success: true,
+        message: "No attendance for current shift",
+        status: "not_started",
+        currentAttendanceDate,
+        attendance: null,
+        ...uiState,
+      });
+    }
+
+    const uiState = getAttendanceUIState(attendance);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        uiState.attendanceState === "checked_out"
+          ? "Current shift attendance completed"
+          : "Current shift attendance found",
+      status: attendance.status,
+      currentAttendanceDate,
+      attendance,
+      ...uiState,
+    });
+  } catch (error) {
+    console.log("GET TODAY ATTENDANCE ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 };

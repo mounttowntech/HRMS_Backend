@@ -143,7 +143,7 @@ exports.getMyNotifications = async (req, res) => {
 
     const filter = {
       companyId: req.user.companyId,
-      receiverId: userId,
+      receiverId: user._id,
     };
 
     if (req.query.type) filter.type = req.query.type;
@@ -155,7 +155,7 @@ exports.getMyNotifications = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedNotifications = notifications.map((item) => ({
+    const formattedNotifications = uniqueNotifications.map((item) => ({
       ...item,
       timeAgo: getTimeAgo(item.createdAt),
     }));
@@ -177,8 +177,10 @@ exports.getMyNotifications = async (req, res) => {
 // GET ALL NOTIFICATIONS
 exports.getAllNotifications = async (req, res) => {
   try {
+    console.log("Company ID:", req.user);
     const filter = {
       companyId: req.user.companyId,
+      receiverId: req.user?.id || { $exists: true },
     };
 
     if (req.query.type) filter.type = req.query.type;
@@ -191,8 +193,15 @@ exports.getAllNotifications = async (req, res) => {
       .populate("receiverId", "name userName email role")
       .sort({ createdAt: -1 })
       .lean();
-
-    const formattedNotifications = notifications.map((item) => ({
+      const uniqueNotifications = Array.from(
+        new Map(
+          notifications.map((item) => [
+            item.referenceId?.toString(),
+            item,
+          ])
+        ).values()
+      );
+    const formattedNotifications = uniqueNotifications.map((item) => ({
       ...item,
       timeAgo: getTimeAgo(item.createdAt),
     }));
@@ -240,11 +249,14 @@ exports.markAsRead = async (req, res) => {
   try {
     const userId = getUserId(req);
 
+    console.log("_id is : ", req.params.id)
+    console.log("_id is : ", req.user.companyId)
+    console.log("_id is : ", userId)
     const notification = await Notification.findOneAndUpdate(
       {
         _id: req.params.id,
         companyId: req.user.companyId,
-        receiverId: userId,
+        // receiverId: userId,
       },
       {
         isRead: true,

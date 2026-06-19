@@ -112,6 +112,15 @@ console.log("balance leave is :", {
       });
     }
 
+    console.log("req.user:", req.user);
+console.log("userId:", userId);
+
+console.log("Employee found:", emp);
+
+console.log("req.body:", req.body);
+
+console.log("companyId:", req.user.companyId);
+
     const leave = await Leave.create({
       companyId: req.user.companyId,
       employeeId: emp._id,
@@ -141,9 +150,9 @@ console.log("balance leave is :", {
       senderId: userId,
       roles: notifyRoles,
       title: "New Leave Request",
-      message: `${emp.fullName} applied for ${leaveType} leave from ${fromDate} to ${toDate}.`,
+      message: `${emp.fullName} applied for ${leaveType} leave from ${new Date(fromDate).toLocaleDateString("en-GB")}  to  ${new Date(toDate).toLocaleDateString("en-GB")}.`,
       type: "leave_request",
-      referenceId: leave._id,
+      referenceId: leave._id,   
       referenceModel: "Leave",
     });
 
@@ -207,6 +216,15 @@ exports.managerApproval = async (req, res) => {
       });
     }
 
+    if (approved) {
+      // await createHRAnnouncement({
+      //   companyId: req.user.companyId,
+      //   title: "Leave Waiting for HR Approval",
+      //   description: `${
+      //     emp?.fullName || "Employee"
+      //   } leave request is approved by manager and waiting for HR approval.`,
+      //   createdBy: getUserId(req),
+      // });
     // if (approved) {
     //   await createHRAnnouncement({
     //     companyId: req.user.companyId,
