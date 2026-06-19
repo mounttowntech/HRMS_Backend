@@ -225,6 +225,15 @@ exports.managerApproval = async (req, res) => {
       //   } leave request is approved by manager and waiting for HR approval.`,
       //   createdBy: getUserId(req),
       // });
+    // if (approved) {
+    //   await createHRAnnouncement({
+    //     companyId: req.user.companyId,
+    //     title: "Leave Waiting for HR Approval",
+    //     description: `${
+    //       emp?.fullName || "Employee"
+    //     } leave request is approved by manager and waiting for HR approval.`,
+    //     createdBy: getUserId(req),
+    //   });
 
       await sendNotificationToRoles({
         companyId: req.user.companyId,
