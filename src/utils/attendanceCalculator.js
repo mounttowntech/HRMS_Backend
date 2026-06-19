@@ -1,31 +1,9 @@
 const DEFAULT_BREAK_MINUTES = 60;
-
-const DAY_SHIFT_START = "09:30";
-const NIGHT_SHIFT_START = "19:00";
-
-const FULL_DAY_MINUTES = 480;
-const HALF_DAY_MINUTES = 240;
+const FULL_DAY_MINUTES = 480; // 8 hours
+const HALF_DAY_MINUTES = 240; // 4 hours
 
 exports.minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
-};
-
-const getISTTime = (attendanceDate, time) => {
-  return new Date(`${attendanceDate}T${time}:00+05:30`);
-};
-
-exports.calculateLateMinutes = (attendanceDate, punchIn, shiftName = "Day Shift") => {
-  if (!punchIn) return 0;
-
-  const isNightShift = shiftName?.toLowerCase().includes("night");
-
-  const shiftStartTime = isNightShift ? NIGHT_SHIFT_START : DAY_SHIFT_START;
-
-  const officeStart = getISTTime(attendanceDate, shiftStartTime);
-
-  const lateMinutes = exports.minutesDiff(officeStart, punchIn);
-
-  return lateMinutes > 0 ? lateMinutes : 0;
 };
 
 exports.calculateAttendance = (attendance) => {
@@ -64,13 +42,10 @@ exports.calculateAttendance = (attendance) => {
       totalMinutes - attendance.totalBreakMinutes
     );
 
-    attendance.lateMinutes = exports.calculateLateMinutes(
-      attendance.attendanceDate,
-      attendance.punchIn,
-      attendance.shiftName
-    );
-
-    attendance.isLate = attendance.lateMinutes > 0;
+    attendance.overtimeMinutes =
+      attendance.workingMinutes > FULL_DAY_MINUTES
+        ? attendance.workingMinutes - FULL_DAY_MINUTES
+        : 0;
 
     if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
       attendance.status = "present";
@@ -85,4 +60,18 @@ exports.calculateAttendance = (attendance) => {
   }
 
   return attendance;
+};
+
+exports.calculateLateMinutes = (attendanceDate, punchIn, shiftName = "Day Shift") => {
+  if (!punchIn) return 0;
+
+  const shiftStart = shiftName?.toLowerCase().includes("night")
+    ? "19:00"
+    : "09:30";
+
+  const officeStart = new Date(`${attendanceDate}T${shiftStart}:00+05:30`);
+
+  const lateMinutes = exports.minutesDiff(officeStart, punchIn);
+
+  return lateMinutes > 0 ? lateMinutes : 0;
 };

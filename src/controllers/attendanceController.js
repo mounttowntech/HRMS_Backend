@@ -8,6 +8,7 @@ const PermissionRequest = require("../models/permissionRequest");
 const {
   getISTDateString,
   getISTStartOfDay,
+  formatISTDateTime,
 } = require("../utils/attendanceDate");
 
 const {
@@ -15,6 +16,7 @@ const {
   calculateAttendance,
   calculateLateMinutes,
 } = require("../utils/attendanceCalculator");
+
 const {
   getAttendanceDateByShift,
 } = require("../utils/shiftAttendanceDate");
@@ -223,18 +225,15 @@ const roundAmount = (amount) => {
   return Number((amount || 0).toFixed(2));
 };
 
-// EMPLOYEE PUNCH IN
 exports.employeePunchIn = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
       companyId: req.user.companyId,
       status: "active",
-    })
-      .populate("shiftId", "shiftName name")
-      .lean();
+    }).populate("shiftId", "shiftName name");
 
     if (!employee) {
       return res.status(404).json({
@@ -243,12 +242,7 @@ exports.employeePunchIn = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     let attendance = await Attendance.findOne({
@@ -277,6 +271,7 @@ exports.employeePunchIn = async (req, res) => {
 
     attendance.punchIn = new Date();
     attendance.punchInSource = "employee_login";
+    attendance.shiftName = shiftName;
     attendance.status = "working";
 
     await attendance.save();
@@ -294,7 +289,82 @@ exports.employeePunchIn = async (req, res) => {
   }
 };
 
-// EMPLOYEE PUNCH OUT
+// exports.employeePunchOut = async (req, res) => {
+//   try {
+//     const userId = getUserId(req);
+
+//     const employee = await Employee.findOne({
+//       userId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
+
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
+
+//     const shiftName = getShiftName(employee);
+//     const attendanceDate = getAttendanceDateByShift(shiftName);
+
+//     const attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId: employee._id,
+//       attendanceDate,
+//     });
+
+//     if (!attendance || !attendance.punchIn) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Punch in first",
+//       });
+//     }
+
+//     if (attendance.punchOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Already punched out",
+//       });
+//     }
+
+//     const activeBreak = attendance.breaks[attendance.breaks.length - 1];
+
+//     if (activeBreak && !activeBreak.breakOut) {
+//       activeBreak.breakOut = new Date();
+//       activeBreak.minutes = 60;
+//       activeBreak.source = "auto_closed_default_60_min";
+//     }
+
+//     attendance.punchOut = new Date();
+//     attendance.punchOutSource = "employee_login";
+//     attendance.shiftName = attendance.shiftName || shiftName;
+
+//     calculateAttendance(attendance);
+
+//     attendance.lateMinutes = calculateLateMinutes(
+//       attendance.attendanceDate,
+//       attendance.punchIn,
+//       attendance.shiftName
+//     );
+
+//     attendance.isLate = attendance.lateMinutes > 0;
+
+//     await attendance.save();
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Punch out successful",
+//       attendance,
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.employeePunchOut = async (req, res) => {
   try {
     const userId = req.user?.userId || req.user?.id;
@@ -317,13 +387,25 @@ exports.employeePunchOut = async (req, res) => {
       employee.shiftType ||
       "Day Shift";
 
-    const attendanceDate = getAttendanceDateByShift(shiftName);
-
-    const attendance = await Attendance.findOne({
+    // FIRST: find active open attendance
+    // This works for day shift and night shift
+    let attendance = await Attendance.findOne({
       companyId: req.user.companyId,
       employeeId: employee._id,
-      attendanceDate,
-    });
+      punchIn: { $ne: null },
+      punchOut: null,
+    }).sort({ punchIn: -1 });
+
+    // SECOND: fallback by shift attendanceDate
+    if (!attendance) {
+      const attendanceDate = getAttendanceDateByShift(shiftName);
+
+      attendance = await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        attendanceDate,
+      });
+    }
 
     if (!attendance || !attendance.punchIn) {
       return res.status(400).json({
@@ -339,39 +421,50 @@ exports.employeePunchOut = async (req, res) => {
       });
     }
 
-    const activeBreak = attendance.breaks[attendance.breaks.length - 1];
+    const activeBreak = attendance.breaks?.[attendance.breaks.length - 1];
 
     if (activeBreak && !activeBreak.breakOut) {
       activeBreak.breakOut = new Date();
-      activeBreak.minutes = 60;
-      activeBreak.source = "auto_closed_default_60_min";
+
+      activeBreak.minutes = Math.floor(
+        (activeBreak.breakOut - activeBreak.breakIn) / 60000
+      );
+
+      activeBreak.source = "auto_closed_on_punchout";
     }
 
     attendance.shiftName = attendance.shiftName || shiftName;
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
 
+    console.log("Calculating attendance for punch out...",attendance);
+
     calculateAttendance(attendance);
 
     await attendance.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Punch out successful",
       attendance,
+      display: {
+        punchIn: formatISTDateTime(attendance?.punchIn),
+        punchOut: formatISTDateTime(attendance?.punchOut),
+      }
     });
   } catch (error) {
-    res.status(500).json({
+    console.log("PUNCH OUT ERROR:", error);
+
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
 
-// START BREAK
 exports.startBreak = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
@@ -385,12 +478,7 @@ exports.startBreak = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
@@ -442,10 +530,9 @@ exports.startBreak = async (req, res) => {
   }
 };
 
-// END BREAK
 exports.endBreak = async (req, res) => {
   try {
-    const userId = req.user?.userId || req.user?.id;
+    const userId = getUserId(req);
 
     const employee = await Employee.findOne({
       userId,
@@ -459,12 +546,7 @@ exports.endBreak = async (req, res) => {
       });
     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
-
+    const shiftName = getShiftName(employee);
     const attendanceDate = getAttendanceDateByShift(shiftName);
 
     const attendance = await Attendance.findOne({
@@ -1638,108 +1720,180 @@ exports.getAttendanceCalendarView = async (req, res) => {
 
 
 // GET SINGLE USER ATTENDANCE - DAILY BASIS
+// exports.getAttendanceByUserId = async (req, res) => {
+
+//   try {
+
+//     const { employeeId } = req.params;
+
+
+
+//     if (!employeeId) {
+
+//       return res.status(400).json({
+
+//         success: false,
+
+//         message: "employeeId is required",
+
+//       });
+
+//     }
+
+
+
+//     const start = new Date();
+
+//     start.setHours(0, 0, 0, 0);
+
+
+
+//     const end = new Date();
+
+//     end.setHours(23, 59, 59, 999);
+
+
+
+//     const attendance = await Attendance.findOne({
+
+//       companyId: req.user.companyId,
+
+//       employeeId,
+
+//       date: {
+
+//         $gte: start,
+
+//         $lte: end,
+
+//       },
+
+//     }).populate(
+
+//       "employeeId",
+
+//       "fullName employeeCode email departmentId designationId"
+
+//     );
+
+
+
+//     if (!attendance) {
+
+//       return res.status(200).json({
+
+//         success: true,
+
+//         message: "Employee is absent today",
+
+//         status: "absent",
+
+//         attendance: null,
+
+//       });
+
+//     }
+
+
+
+//     res.status(200).json({
+
+//       success: true,
+
+//       message: "Today attendance found",
+
+//       status: attendance.status,
+
+//       attendance,
+
+//     });
+
+//   } catch (error) {
+
+//     console.log("GET TODAY ATTENDANCE ERROR:", error);
+
+
+
+//     res.status(500).json({
+
+//       success: false,
+
+//       message: error.message,
+
+//     });
+
+//   }
+
+// };
+
 exports.getAttendanceByUserId = async (req, res) => {
-
   try {
-
     const { employeeId } = req.params;
 
-
-
     if (!employeeId) {
-
       return res.status(400).json({
-
         success: false,
-
         message: "employeeId is required",
-
       });
-
     }
 
+    // 1. First check active attendance
+    // This handles night shift also
+    const activeAttendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId,
+      punchIn: { $ne: null },
+      punchOut: null,
+    })
+      .sort({ punchIn: -1 })
+      .populate(
+        "employeeId",
+        "fullName employeeCode email departmentId designationId"
+      );
+console.log('activeAttendance:', activeAttendance);
 
+    if (activeAttendance) {
+      return res.status(200).json({
+        success: true,
+        message: "Active attendance found",
+        status: activeAttendance.status,
+        attendance: activeAttendance,
+      });
+    }
 
-    const start = new Date();
-
-    start.setHours(0, 0, 0, 0);
-
-
-
-    const end = new Date();
-
-    end.setHours(23, 59, 59, 999);
-
-
+    // 2. If no active attendance, check today's attendance
+    const attendanceDate = getISTDateString();
 
     const attendance = await Attendance.findOne({
-
       companyId: req.user.companyId,
-
       employeeId,
-
-      date: {
-
-        $gte: start,
-
-        $lte: end,
-
-      },
-
+      attendanceDate,
     }).populate(
-
       "employeeId",
-
       "fullName employeeCode email departmentId designationId"
-
     );
 
-
-
     if (!attendance) {
-
       return res.status(200).json({
-
         success: true,
-
         message: "Employee is absent today",
-
         status: "absent",
-
         attendance: null,
-
       });
-
     }
 
-
-
-    res.status(200).json({
-
+    return res.status(200).json({
       success: true,
-
       message: "Today attendance found",
-
       status: attendance.status,
-
       attendance,
-
     });
-
   } catch (error) {
-
     console.log("GET TODAY ATTENDANCE ERROR:", error);
 
-
-
     res.status(500).json({
-
       success: false,
-
       message: error.message,
-
     });
-
   }
-
 };
