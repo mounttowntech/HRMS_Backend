@@ -24,7 +24,7 @@ router.post(
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr","employee"),
+  allowRoles("admin", "hr","employee","teamlead","projectmanager"),
   getCompanies
 );
 
@@ -32,7 +32,7 @@ router.get(
 router.get(
   "/:id",
   verifyToken,
-  allowRoles("admin", "hr","employee"),
+  allowRoles("admin", "hr","employee","teamlead","projectmanager"),
   getSingleCompany
 );
 
