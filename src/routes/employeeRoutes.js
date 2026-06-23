@@ -13,7 +13,7 @@ router.post(
   employeeController.createEmployee
 );
 
-router.get("/all", verifyToken,allowRoles("admin","projectmanager","teamlead"), employeeController.getEmployees);
+router.get("/all", verifyToken,allowRoles("admin","projectmanager","teamlead","employee"), employeeController.getEmployees);
 router.get("/:id", verifyToken, employeeController.getEmployeeById);
 
 router.put(
