@@ -201,6 +201,26 @@ exports.getHRDashboard = async (req, res) => {
       status: "active",
     });
 
+    //get new joiners in the current month
+    const newJoiners = await Employee.countDocuments({
+      companyId,
+      status: "active",
+      joiningDate: { $gte: start, $lte: end },
+    });
+
+    //get leave requests in the current month
+    const leaveRequests = await Leave.countDocuments({
+      companyId,
+      status: "pending",
+      fromDate: { $gte: start, $lte: end },
+    });
+
+    //get job open positions status base open
+    const openPositions = await JobPost.countDocuments({
+      companyId,
+      status: "open",
+    });
+
     const present = await Attendance.countDocuments({
       companyId,
       date: { $gte: start, $lte: end },
@@ -223,12 +243,19 @@ exports.getHRDashboard = async (req, res) => {
       success: true,
       data: {
         monthRange: { start, end },
-
+        dashboardCard: {
+          totalEmployees,
+          present,
+          newJoiners,
+          leaveRequests,
+          openPositions,
+        },
         attendanceOverview: {
           present,
           absent,
           late,
           attendancePercentage: percentage(present, totalEmployees),
+          totalEmployees,
         },
 
         onboardingProgress: {
