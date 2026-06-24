@@ -16,6 +16,11 @@ const roundAmount = (amount) => {
   return Number((amount || 0).toFixed(2));
 };
 
+const getPayslipFilePath = (payslipUrl) => {
+  const cleanPath = payslipUrl.replace(/^\/+/, "");
+  return path.join(__dirname, "..", cleanPath);
+};
+
 // PROCESS PAYROLL
 exports.processPayroll = async (req, res) => {
   try {
@@ -55,8 +60,8 @@ exports.processPayroll = async (req, res) => {
         $in: ["employee", "teamlead", "projectmanager", "hr"],
       },
     })
-      .populate("designationId", "name")
-      .populate("shiftId", "shiftName name type")
+      .populate("designationId", "name designationName")
+      .populate("shiftId", "shiftName name shiftType")
       .lean();
 
     const payrollEmployees = [];
@@ -69,13 +74,19 @@ exports.processPayroll = async (req, res) => {
       const shiftName =
         employee.shiftId?.shiftName ||
         employee.shiftId?.name ||
+        employee.shiftId?.shiftType ||
         employee.shiftType ||
-        "Morning Shift";
+        "N/A";
+
+      const designation =
+        employee.designationId?.name ||
+        employee.designationId?.designationName ||
+        employee.designation ||
+        employee.role ||
+        "N/A";
 
       const isNightShift = shiftName.toLowerCase().includes("night");
 
-      // Morning Shift = 24 working days
-      // Night Shift = 22 working days
       const totalWorkingDays = isNightShift ? 22 : 24;
 
       const presentDays = await Attendance.countDocuments({
@@ -94,8 +105,6 @@ exports.processPayroll = async (req, res) => {
 
       const earnedSalary = perDaySalary * presentDays;
 
-      // Morning Shift = 50% basic
-      // Night Shift = 40% basic
       const basicSalary = isNightShift
         ? earnedSalary * 0.4
         : earnedSalary * 0.5;
@@ -107,7 +116,6 @@ exports.processPayroll = async (req, res) => {
         : earnedSalary * 0.05;
 
       const medicalAllowance = earnedSalary * 0.0852;
-
       const conveyanceAllowance = earnedSalary * 0.0852;
 
       const calculatedTotal =
@@ -127,22 +135,11 @@ exports.processPayroll = async (req, res) => {
         conveyanceAllowance +
         otherAllowance;
 
-      // PF = 12% of Basic Salary
       const pfDeduction = basicSalary * 0.12;
-
-      // ESI = 0.75% of Gross Salary if gross <= 21000
-      const esiDeduction =
-        grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
+      const esiDeduction = grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
 
       const totalDeduction = pfDeduction + esiDeduction;
-
       const netSalary = grossEarning - totalDeduction;
-
-      const designation =
-        employee.designationId?.name ||
-        employee.designation ||
-        employee.role ||
-        "";
 
       const payrollData = {
         totalWorkingDays,
@@ -213,13 +210,13 @@ exports.processPayroll = async (req, res) => {
       status: "Completed",
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Payroll processed successfully",
       data: payroll,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Payroll processing failed",
       error: error.message,
@@ -227,7 +224,6 @@ exports.processPayroll = async (req, res) => {
   }
 };
 
-// GET ALL PAYROLLS
 exports.getAllPayrolls = async (req, res) => {
   try {
     const filter = {
@@ -247,32 +243,23 @@ exports.getAllPayrolls = async (req, res) => {
     }
 
     const payrolls = await Payroll.find(filter)
-      .populate(
-        "companyId",
-        "companyName email"
-      )
-      .populate(
-        "employees.employeeId",
-        "employeeCode fullName email salary role"
-      )
-      .sort({
-        year: -1,
-        month: -1,
-        createdAt: -1,
-      });
+      .populate("companyId", "companyName email")
+      .populate("employees.employeeId", "employeeCode fullName email salary role")
+      .sort({ year: -1, month: -1, createdAt: -1 });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: payrolls.length,
       payrolls,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
 exports.getMyPayslips = async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -289,51 +276,18 @@ exports.getMyPayslips = async (req, res) => {
       });
     }
 
-    const joiningDate = employee.joiningDate
-      ? new Date(employee.joiningDate)
-      : null;
-
-    const relievingDate = employee.relievingDate
-      ? new Date(employee.relievingDate)
-      : new Date();
-
     const payrolls = await Payroll.find({
       companyId: req.user.companyId,
       "employees.employeeId": employee._id,
     })
       .populate("companyId", "companyName email")
-      .populate(
-        "employees.employeeId",
-        "employeeCode fullName email salary role"
-      )
-      .sort({
-        year: -1,
-        month: -1,
-        createdAt: -1,
-      })
+      .populate("employees.employeeId", "employeeCode fullName email salary role")
+      .sort({ year: -1, month: -1, createdAt: -1 })
       .lean();
 
     const filteredPayrolls = [];
 
-    for (const payroll of payrolls) {
-      const payrollDate = new Date(payroll.year, payroll.month - 1, 1);
-
-      if (
-        joiningDate &&
-        payrollDate <
-          new Date(joiningDate.getFullYear(), joiningDate.getMonth(), 1)
-      ) {
-        continue;
-      }
-
-      if (
-        relievingDate &&
-        payrollDate >
-          new Date(relievingDate.getFullYear(), relievingDate.getMonth(), 1)
-      ) {
-        continue;
-      }
-
+    payrolls.forEach((payroll) => {
       const employeePayslip = payroll.employees.find(
         (item) =>
           item.employeeId &&
@@ -343,72 +297,37 @@ exports.getMyPayslips = async (req, res) => {
       if (employeePayslip) {
         filteredPayrolls.push({
           _id: payroll._id,
-
           companyId: payroll.companyId,
-
           month: payroll.month,
           year: payroll.year,
           payrollName: payroll.payrollName,
           period: payroll.period,
-
           totalEmployees: payroll.totalEmployees,
           totalEarnings: payroll.totalEarnings,
           totalDeductions: payroll.totalDeductions,
           netPayroll: payroll.netPayroll,
           status: payroll.status,
-
-          employees: [
-            {
-              employeeId: employeePayslip.employeeId,
-
-              employeeCode: employeePayslip.employeeCode,
-              employeeName: employeePayslip.employeeName,
-              role: employeePayslip.role,
-              designation: employeePayslip.designation,
-              shiftName: employeePayslip.shiftName,
-
-              totalWorkingDays: employeePayslip.totalWorkingDays,
-              presentDays: employeePayslip.presentDays,
-              absentDays: employeePayslip.absentDays,
-
-              basicSalary: employeePayslip.basicSalary,
-              hra: employeePayslip.hra,
-              shiftAllowance: employeePayslip.shiftAllowance,
-              medicalAllowance: employeePayslip.medicalAllowance,
-              conveyanceAllowance: employeePayslip.conveyanceAllowance,
-              otherAllowance: employeePayslip.otherAllowance,
-
-              grossEarning: employeePayslip.grossEarning,
-
-              pfDeduction: employeePayslip.pfDeduction,
-              esiDeduction: employeePayslip.esiDeduction,
-              totalDeduction: employeePayslip.totalDeduction,
-
-              netSalary: employeePayslip.netSalary,
-              payslipUrl: employeePayslip.payslipUrl,
-            },
-          ],
-
+          employees: [employeePayslip],
           createdAt: payroll.createdAt,
           updatedAt: payroll.updatedAt,
         });
       }
-    }
+    });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       count: filteredPayrolls.length,
       payrolls: filteredPayrolls,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch payslips",
       error: error.message,
     });
   }
 };
-// GET SINGLE PAYROLL
+
 exports.getPayrollById = async (req, res) => {
   try {
     const payroll = await Payroll.findOne({
@@ -423,12 +342,12 @@ exports.getPayrollById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: payroll,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch payroll",
       error: error.message,
@@ -436,7 +355,6 @@ exports.getPayrollById = async (req, res) => {
   }
 };
 
-// PAYROLL DASHBOARD
 exports.getPayrollDashboard = async (req, res) => {
   try {
     const companyId = req.user.companyId;
@@ -459,7 +377,7 @@ exports.getPayrollDashboard = async (req, res) => {
       )
       .lean();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: {
         dashboardCard: {
@@ -468,14 +386,12 @@ exports.getPayrollDashboard = async (req, res) => {
           totalDeductions: latestPayroll?.totalDeductions || 0,
           netPayroll: latestPayroll?.netPayroll || 0,
         },
-
         payrollOverview: payrollOverview.map((item) => ({
           monthYear: `${item.month}/${item.year}`,
           totalEarning: item.totalEarnings,
           totalDeduction: item.totalDeductions,
           netPayroll: item.netPayroll,
         })),
-
         recentPayrolls: recentPayrolls.map((item) => ({
           payrollName: item.payrollName,
           period: item.period,
@@ -488,7 +404,7 @@ exports.getPayrollDashboard = async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Payroll dashboard failed",
       error: error.message,
@@ -496,7 +412,6 @@ exports.getPayrollDashboard = async (req, res) => {
   }
 };
 
-// GET EMPLOYEE PAYSLIP DETAILS
 exports.getEmployeePayslip = async (req, res) => {
   try {
     const { payrollId, employeeId } = req.params;
@@ -518,12 +433,12 @@ exports.getEmployeePayslip = async (req, res) => {
       (item) => item.employeeId.toString() === employeeId
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: employeePayslip,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch payslip",
       error: error.message,
@@ -531,7 +446,6 @@ exports.getEmployeePayslip = async (req, res) => {
   }
 };
 
-// DOWNLOAD PARTICULAR EMPLOYEE PAYSLIP
 exports.downloadEmployeePayslip = async (req, res) => {
   try {
     const { payrollId, employeeId } = req.params;
@@ -560,21 +474,27 @@ exports.downloadEmployeePayslip = async (req, res) => {
       });
     }
 
-    const filePath = path.join(__dirname, "..", employeePayslip.payslipUrl);
+    let filePath = getPayslipFilePath(employeePayslip.payslipUrl);
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
-        message: "Payslip file not found on server",
+        message: "Payslip file not found on server. Please regenerate payslip.",
+        filePath,
       });
     }
 
-    return res.download(
-      filePath,
-      `${employeePayslip.employeeCode}-${payroll.month}-${payroll.year}-payslip.pdf`
+    const downloadName = `${employeePayslip.employeeCode}-${payroll.month}-${payroll.year}-payslip.pdf`;
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${downloadName}"`
     );
+
+    return res.sendFile(filePath);
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Payslip download failed",
       error: error.message,
@@ -582,7 +502,103 @@ exports.downloadEmployeePayslip = async (req, res) => {
   }
 };
 
-// SEND PARTICULAR EMPLOYEE PAYSLIP MAIL
+exports.regenerateEmployeePayslip = async (req, res) => {
+  try {
+    const { payrollId, employeeId } = req.params;
+
+    const payroll = await Payroll.findOne({
+      _id: payrollId,
+      companyId: req.user.companyId,
+      "employees.employeeId": employeeId,
+    });
+
+    if (!payroll) {
+      return res.status(404).json({
+        success: false,
+        message: "Payslip not found",
+      });
+    }
+
+    const employeePayslip = payroll.employees.find(
+      (item) => item.employeeId.toString() === employeeId
+    );
+
+    if (!employeePayslip) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee payslip not found",
+      });
+    }
+
+    const employee = await Employee.findOne({
+      _id: employeeId,
+      companyId: req.user.companyId,
+    })
+      .populate("designationId", "name")
+      .populate("shiftId", "shiftName name")
+      .lean();
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const monthName = new Date(payroll.year, payroll.month - 1).toLocaleString(
+      "en-US",
+      { month: "short" }
+    );
+
+    const payrollData = {
+      totalWorkingDays: employeePayslip.totalWorkingDays,
+      presentDays: employeePayslip.presentDays,
+      absentDays: employeePayslip.absentDays,
+      monthlySalary: employeePayslip.monthlySalary,
+      perDaySalary: employeePayslip.perDaySalary,
+      designation: employeePayslip.designation,
+      shiftName: employeePayslip.shiftName,
+
+      basicSalary: employeePayslip.basicSalary,
+      hra: employeePayslip.hra,
+      shiftAllowance: employeePayslip.shiftAllowance,
+      medicalAllowance: employeePayslip.medicalAllowance,
+      conveyanceAllowance: employeePayslip.conveyanceAllowance,
+      otherAllowance: employeePayslip.otherAllowance,
+
+      grossEarning: employeePayslip.grossEarning,
+      pfDeduction: employeePayslip.pfDeduction,
+      esiDeduction: employeePayslip.esiDeduction,
+      totalDeduction: employeePayslip.totalDeduction,
+      netSalary: employeePayslip.netSalary,
+    };
+
+    const payslipUrl = await generatePayslip({
+      employee,
+      payrollData,
+      monthName,
+      year: payroll.year,
+    });
+
+    employeePayslip.payslipUrl = payslipUrl;
+
+    await payroll.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Payslip regenerated successfully",
+      payslipUrl,
+      filePath: getPayslipFilePath(payslipUrl),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Payslip regenerate failed",
+      error: error.message,
+    });
+  }
+};
+
 exports.sendEmployeePayslipMail = async (req, res) => {
   try {
     const { payrollId, employeeId } = req.params;
@@ -623,7 +639,7 @@ exports.sendEmployeePayslipMail = async (req, res) => {
       });
     }
 
-    const filePath = path.join(__dirname, "..", employeePayslip.payslipUrl);
+    const filePath = getPayslipFilePath(employeePayslip.payslipUrl);
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
@@ -652,13 +668,13 @@ exports.sendEmployeePayslipMail = async (req, res) => {
       ],
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Payslip sent successfully",
       email: employee.email,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Payslip mail failed",
       error: error.message,
@@ -666,12 +682,6 @@ exports.sendEmployeePayslipMail = async (req, res) => {
   }
 };
 
-
-
-
-
-
-// DELETE PAYROLL
 exports.deletePayroll = async (req, res) => {
   try {
     const payroll = await Payroll.findOneAndDelete({
@@ -686,12 +696,12 @@ exports.deletePayroll = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Payroll deleted successfully",
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to delete payroll",
       error: error.message,
