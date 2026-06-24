@@ -70,8 +70,11 @@ app.use("/api/attendance-requests",require("./src/routes/attendanceRequestRoutes
 app.use("/api/hiring",require("./src/routes/hiringUpdateRoutes"));
 app.use(express.static(path.join(__dirname, "build")));
 
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+console.log("UPLOAD PATH:", path.join(process.cwd(), "uploads"));
+
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"))
+);
 module.exports = app;
 
