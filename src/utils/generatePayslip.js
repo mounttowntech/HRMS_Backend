@@ -11,7 +11,7 @@ const formatAmount = (amount) => {
 
 const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
   return new Promise((resolve, reject) => {
-    const folderPath = path.join(__dirname, "../uploads/payslips");
+    const folderPath = path.join(process.cwd(), "uploads", "payslips");
 
     if (!fs.existsSync(folderPath)) {
       fs.mkdirSync(folderPath, { recursive: true });
