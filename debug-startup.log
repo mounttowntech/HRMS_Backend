@@ -17,3 +17,30 @@
 2026-06-24T05:33:14.904Z - STEP 7: Mongo URI exists = true
 2026-06-24T05:33:14.959Z - STEP 9: server running on port 8000
 2026-06-24T05:33:15.635Z - STEP 8: MongoDB connected
+2026-06-24T07:37:54.412Z - STEP 1: server.js started
+2026-06-24T07:37:54.543Z - STEP 2: dotenv loaded
+2026-06-24T07:37:55.677Z - STEP 3: mongoose loaded
+2026-06-24T07:37:56.532Z - STEP 4: app.js loaded
+2026-06-24T07:37:56.533Z - STEP 5: startup-test created
+2026-06-24T07:37:56.533Z - STEP 6: PORT = 8000
+2026-06-24T07:37:56.534Z - STEP 7: Mongo URI exists = true
+2026-06-24T07:37:56.554Z - STEP 9: server running on port 8000
+2026-06-24T07:37:57.167Z - STEP 8: MongoDB connected
+2026-06-24T07:37:59.359Z - STEP 1: server.js started
+2026-06-24T07:37:59.491Z - STEP 2: dotenv loaded
+2026-06-24T07:38:00.266Z - STEP 3: mongoose loaded
+2026-06-24T07:38:01.131Z - STEP 4: app.js loaded
+2026-06-24T07:38:01.132Z - STEP 5: startup-test created
+2026-06-24T07:38:01.133Z - STEP 6: PORT = 8000
+2026-06-24T07:38:01.133Z - STEP 7: Mongo URI exists = true
+2026-06-24T07:38:01.152Z - STEP 9: server running on port 8000
+2026-06-24T07:38:01.651Z - STEP 8: MongoDB connected
+2026-06-24T07:38:36.123Z - STEP 1: server.js started
+2026-06-24T07:38:36.161Z - STEP 2: dotenv loaded
+2026-06-24T07:38:37.328Z - STEP 3: mongoose loaded
+2026-06-24T07:38:39.397Z - STEP 4: app.js loaded
+2026-06-24T07:38:39.398Z - STEP 5: startup-test created
+2026-06-24T07:38:39.399Z - STEP 6: PORT = 8000
+2026-06-24T07:38:39.399Z - STEP 7: Mongo URI exists = true
+2026-06-24T07:38:39.420Z - STEP 9: server running on port 8000
+2026-06-24T07:38:39.929Z - STEP 8: MongoDB connected
