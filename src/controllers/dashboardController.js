@@ -469,3 +469,98 @@ exports.getProjectManagerDashboard = async (req, res) => {
     });
   }
 };
+
+/* ================= RECRUITMENT DASHBOARD ================= */
+
+exports.getRecruitmentDashboard = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+
+    const openPositions = await JobPost.countDocuments({
+      companyId,
+      status: "open",
+    });
+
+    const newApplicants = await Candidate.countDocuments({
+      companyId,
+      status: "applied",
+    });
+
+    const interviewsScheduled = await Candidate.countDocuments({
+      companyId,
+      status: {
+        $in: ["interview", "hr_interview", "technical_round"],
+      },
+    });
+
+    const talentPipeline = {
+      applied: await Candidate.countDocuments({
+        companyId,
+        status: "applied",
+      }),
+
+      phoneScreen: await Candidate.countDocuments({
+        companyId,
+        status: "phone_screen",
+      }),
+
+      interview: await Candidate.countDocuments({
+        companyId,
+        status: {
+          $in: ["interview", "hr_interview", "technical_round"],
+        },
+      }),
+
+      offer: await Candidate.countDocuments({
+        companyId,
+        status: "offer",
+      }),
+
+      hired: await Candidate.countDocuments({
+        companyId,
+        status: "hired",
+      }),
+    };
+
+    const recentHiringUpdates = await Candidate.find({
+      companyId,
+    })
+      .populate("jobPostId", "title position")
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .select("fullName email status jobPostId updatedAt createdAt")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        recruitmentDashboard: {
+          openPositions,
+          newApplicants,
+          interviewsScheduled,
+        },
+
+        talentPipeline,
+
+        recentHiringUpdates: recentHiringUpdates.map((item) => ({
+          candidateId: item._id,
+          candidateName: item.fullName || "N/A",
+          email: item.email || "N/A",
+          status: item.status || "N/A",
+          jobTitle:
+            item.jobPostId?.title ||
+            item.jobPostId?.position ||
+            "N/A",
+          updatedAt: item.updatedAt,
+          createdAt: item.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Recruitment dashboard failed",
+      error: error.message,
+    });
+  }
+};

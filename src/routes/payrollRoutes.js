@@ -11,6 +11,7 @@ const {
   sendEmployeePayslipMail,
   getMyPayslips,
   deletePayroll,
+  regenerateEmployeePayslip
 } = require("../controllers/payrollController");
 
 const {
@@ -55,7 +56,7 @@ router.get(
 router.get(
   "/:payrollId/employee/:employeeId/download",
   verifyToken,
-  allowRoles("admin", "hr","employee", "teamlead", "projectmanager"),
+  allowRoles("admin", "hr", "employee", "teamlead", "projectmanager"),
   downloadEmployeePayslip
 );
 
@@ -73,7 +74,12 @@ router.get(
   getPayrollById
 );
 
-
+router.post(
+  "/:payrollId/employee/:employeeId/regenerate",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  regenerateEmployeePayslip
+);
 router.delete(
   "/:id",
   verifyToken,
