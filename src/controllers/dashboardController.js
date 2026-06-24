@@ -19,10 +19,24 @@ exports.getAdminDashboard = async (req, res) => {
     const companyId = req.user.companyId;
     const { start, end } = getISTMonthRange();
 
-    const totalEmployees = await Employee.countDocuments({
-      companyId,
-      status: "active",
-    });
+   const totalEmployees = await Employee.countDocuments({
+  companyId,
+  status: "active",
+});
+
+const recentEmployees = await Employee.find({
+  companyId,
+  status: "active",
+})
+  .select(
+    "fullName email phone employeeCode departmentId designationId joiningDate profileImage shiftId status"
+  )
+  .populate("departmentId", "departmentName name")
+  .populate("designationId", "designationName name")
+  .populate("shiftId", "shiftName name")
+  .sort({ createdAt: -1 }) // latest employees first
+  .limit(5)
+  .lean();
 
     const presentToday = await Attendance.countDocuments({
       companyId,
@@ -151,6 +165,19 @@ exports.getAdminDashboard = async (req, res) => {
           newApplicants,
           interviewsScheduled,
         },
+
+        recentEmployees: recentEmployees.map((emp) => ({
+          fullName: emp.fullName,
+          email: emp.email,
+          contactNumber: emp.phone,
+          employeeCode: emp.employeeCode,
+          department: emp.departmentId?.name || "N/A",
+          designation: emp.designationId?.name || "N/A",
+          shift: emp.shiftId?.shiftName || "N/A",
+          joiningDate: emp.joiningDate,
+          profileImage: emp.profileImage,
+          status: emp.status,
+        })),
       },
     });
   } catch (error) {
@@ -172,6 +199,26 @@ exports.getHRDashboard = async (req, res) => {
     const totalEmployees = await Employee.countDocuments({
       companyId,
       status: "active",
+    });
+
+    //get new joiners in the current month
+    const newJoiners = await Employee.countDocuments({
+      companyId,
+      status: "active",
+      joiningDate: { $gte: start, $lte: end },
+    });
+
+    //get leave requests in the current month
+    const leaveRequests = await Leave.countDocuments({
+      companyId,
+      status: "pending",
+      fromDate: { $gte: start, $lte: end },
+    });
+
+    //get job open positions status base open
+    const openPositions = await JobPost.countDocuments({
+      companyId,
+      status: "open",
     });
 
     const present = await Attendance.countDocuments({
@@ -196,12 +243,19 @@ exports.getHRDashboard = async (req, res) => {
       success: true,
       data: {
         monthRange: { start, end },
-
+        dashboardCard: {
+          totalEmployees,
+          present,
+          newJoiners,
+          leaveRequests,
+          openPositions,
+        },
         attendanceOverview: {
           present,
           absent,
           late,
           attendancePercentage: percentage(present, totalEmployees),
+          totalEmployees,
         },
 
         onboardingProgress: {
@@ -373,9 +427,32 @@ exports.getTeamLeadDashboard = async (req, res) => {
     const companyId = req.user.companyId;
     const teamLeadId = req.user.employeeId;
 
-    const members = await Employee.find({
+      //find projects assigned to team lead
+      const projects = await Project.find({
+        companyId,
+        teamlead: teamLeadId
+      }).lean().populate("teamMembers", "fullName employeeCode status").populate("assignedBy", "fullName").populate("projectmanager", "fullName");
+
+      //get team members assigned pending tasks
+      const teamMemberIds = projects.flatMap(project => project.teamMembers.map(member =>  member._id));
+      const pendingTasks = await Task.find({
+        companyId,
+        assignedTo: { $in: teamMemberIds },
+        status: { $in: ["pending", "in_progress"] }
+      }).lean();
+
+      //get leave requests from team members
+      const leaveRequests = await Leave.find({
+        companyId,
+        employeeId: { $in: teamMemberIds },
+        status: "pending"
+      }).lean();
+
+
+      const teamMembersData = await Employee.find({
       companyId,
-      projectManager: teamLeadId,
+      _id: { $in: teamMemberIds },
+      role: "employee",
     })
       .populate("departmentId", "name")
       .select("fullName employeeCode departmentId status")
@@ -385,15 +462,17 @@ exports.getTeamLeadDashboard = async (req, res) => {
       success: true,
       data: {
         dashboardCard: {
-          teamMembers: members.length,
+          //exclude team lead from team members count
+          teamMembers: teamMembersData ? teamMembersData.length : 0,
+          PendingTasks: pendingTasks.length || 0,
+          leaveRequests: leaveRequests.length || 0,
         },
-
-        teamMembers: members.map((emp) => ({
-          name: emp.fullName,
-          ID: emp.employeeCode,
-          department: emp.departmentId?.name || "",
-          status: emp.status,
-        })),
+        teamMembers: teamMembersData ? teamMembersData.map((member) => ({
+          fullName: member.fullName,
+          employeeCode: member.employeeCode,
+          department: member.departmentId?.name || "N/A",
+          status: member.status,
+        })) : [],
       },
     });
   } catch (error) {
@@ -411,31 +490,51 @@ exports.getProjectManagerDashboard = async (req, res) => {
   try {
     const companyId = req.user.companyId;
     const managerId = req.user.employeeId;
-
     const projects = await Project.find({
       companyId,
-      projectManager: managerId,
+      projectmanager: managerId,
     }).lean();
-
     const projectIds = projects.map((item) => item._id);
 
-    const tasksInProgress = await Task.countDocuments({
+    const tasks = await Task.find({
       companyId,
       projectId: { $in: projectIds },
-      status: "in_progress",
-    });
+    }).lean().populate("projectId", "projectName").populate("assignedTo", "fullName");
+    const tasksInProgress = await tasks.filter((task) => task.status === "in_progress").length;
+
+    const tasksCompleted = await tasks.filter(
+      (task) => task.status === "completed"
+    ).length;
 
     const teamMembers = await Employee.countDocuments({
       companyId,
       projectManager: managerId,
     });
 
+    const recentTasks = [...tasks]
+  .sort(
+    (a, b) =>
+      new Date(b.updatedAt) - new Date(a.updatedAt)
+  )
+  .slice(0, 5);
+
+  const recentActivities = recentTasks.map((task) => ({
+  _id: task._id,
+  taskName: task.taskName,
+  status: task.status === "completed" ? "Task Completed" : task.status === "assigned" ? "Task Assigned" : task.status === "in_progress" ? "Task In Progress" : "Task Updated",
+  project: task?.projectId?.projectName || "N/A",
+user: task.assignedTo ? task.assignedTo.fullName || "N/A" : "N/A",
+  updatedAt: task.updatedAt,
+}));
     res.status(200).json({
       success: true,
       data: {
         dashboardCard: {
+          activeProjects: projects.length || 0,
           teamMembers,
           tasksInProgress,
+          tasksCompleted,
+          overdueTasks: tasks.filter((task) => task.dueDate < new Date() && task.status !== "completed").length || 0,
         },
 
         projectProgress: projects.map((project) => ({
@@ -443,25 +542,26 @@ exports.getProjectManagerDashboard = async (req, res) => {
           percentage: project.progress || 0,
         })),
 
-        recentActivities: [],
+        recentActivities,
 
         myProjects: projects.map((project) => ({
           projectName: project.projectName || project.name,
           teamCount: project.teamMembers?.length || 0,
           progress: project.progress || 0,
-          deadline: project.deadline,
-          status: project.status || "on track",
+          deadline: project.dueDate,
+          status: project.status || "on track"
         })),
 
         upcomingDeadlines: projects.map((project) => ({
           projectName: project.projectName || project.name,
-          deadline: project.deadline,
-          date: project.deadline,
+          deadline: project.dueDate,
+          date: project.dueDate,
           desc: project.description || "",
         })),
       },
     });
   } catch (error) {
+    console.error("Error in getProjectManagerDashboard:", error);
     res.status(500).json({
       success: false,
       message: "Project manager dashboard failed",
