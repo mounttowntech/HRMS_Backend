@@ -628,7 +628,7 @@ exports.getRecruitmentDashboard = async (req, res) => {
       .populate("jobPostId", "title position")
       .sort({ updatedAt: -1 })
       .limit(5)
-      .select("fullName email status jobPostId updatedAt createdAt")
+      .select("fullName email phone status jobPostId updatedAt createdAt")
       .lean();
 
     return res.status(200).json({
@@ -646,11 +646,27 @@ exports.getRecruitmentDashboard = async (req, res) => {
           candidateId: item._id,
           candidateName: item.fullName || "N/A",
           email: item.email || "N/A",
+          phone: item.phone || "N/A",
           status: item.status || "N/A",
           jobTitle:
             item.jobPostId?.title ||
             item.jobPostId?.position ||
             "N/A",
+          title:
+            item.status === "applied"
+              ? "New Applicant"
+              : item.status === "phone_screen"
+              ? "Phone Screen"
+              : item.status === "interview"
+              ? "Interview Scheduled"
+              : item.status === "offer"
+              ? "Offer Sent"
+              : item.status === "hired"
+              ? "Candidate Hired"
+              : "Candidate Updated",
+          message: `${item.fullName || "Candidate"} is currently in ${
+            item.status?.replaceAll("_", " ") || "N/A"
+          } stage`,
           updatedAt: item.updatedAt,
           createdAt: item.createdAt,
         })),

@@ -11,7 +11,10 @@ app.use(express.urlencoded({ extended: true }));
 console.log("UPLOAD PATH app pp.js:");
 // app.use("/uploads", express.static("uploads"));
 
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "src/uploads"))
+);
 // app.get("/", (req, res) => {
 //   res.json({
 //     success: true,
