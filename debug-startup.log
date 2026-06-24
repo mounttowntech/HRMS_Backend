@@ -44,3 +44,12 @@
 2026-06-24T07:38:39.399Z - STEP 7: Mongo URI exists = true
 2026-06-24T07:38:39.420Z - STEP 9: server running on port 8000
 2026-06-24T07:38:39.929Z - STEP 8: MongoDB connected
+2026-06-24T07:40:19.218Z - STEP 1: server.js started
+2026-06-24T07:40:19.363Z - STEP 2: dotenv loaded
+2026-06-24T07:40:21.147Z - STEP 3: mongoose loaded
+2026-06-24T07:40:22.106Z - STEP 4: app.js loaded
+2026-06-24T07:40:22.107Z - STEP 5: startup-test created
+2026-06-24T07:40:22.108Z - STEP 6: PORT = 8000
+2026-06-24T07:40:22.108Z - STEP 7: Mongo URI exists = true
+2026-06-24T07:40:22.132Z - STEP 9: server running on port 8000
+2026-06-24T07:40:22.654Z - STEP 8: MongoDB connected
