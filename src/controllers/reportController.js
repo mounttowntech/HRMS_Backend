@@ -5,6 +5,8 @@ const Payroll = require("../models/Payroll");
 const JobPost = require("../models/JobPost");
 const Candidate = require("../models/Candidate");
 const mongoose = require("mongoose");
+const Department = require("../models/departmentModel");
+const Task = require("../models/Task");
 
 const { percentage, getISTMonthRange } = require("../utils/dashboardutils");
 
@@ -568,6 +570,182 @@ console.log("employeesByDepartment:",employeesByDepartment)
     
     console.log("hiringCountByDepartment:",hiringCountByDepartment);
 
+    //get employee leave count by department
+    const employeeLeaveCountByDepartment = await Department.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+        },
+      },
+    
+      {
+        $lookup: {
+          from: "employees",
+          localField: "_id",
+          foreignField: "departmentId",
+          as: "employees",
+        },
+      },
+    
+      {
+        $lookup: {
+          from: "leaves",
+          let: {
+            employeeIds: "$employees._id",
+          },
+          pipeline: [
+            {
+              $match: {
+                companyId: new mongoose.Types.ObjectId(companyId),
+                $expr: {
+                  $in: ["$employeeId", "$$employeeIds"],
+                },
+              },
+            },
+            // Optional
+            // { $match: { status: "approved" } }
+          ],
+          as: "leaves",
+        },
+      },
+    
+      {
+        $project: {
+          _id: 0,
+          department: "$name",
+          leaveCount: {
+            $size: "$leaves",
+          },
+        },
+      },
+    
+      {
+        $sort: {
+          department: 1,
+        },
+      },
+    ]);
+    
+    // console.log("employeeLeaveCountByDepartment:",employeeLeaveCountByDepartment);
+
+    const performanceCountByDepartment = await Department.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+        },
+      },
+    
+      {
+        $lookup: {
+          from: "employees",
+          localField: "_id",
+          foreignField: "departmentId",
+          as: "employees",
+        },
+      },
+    
+      {
+        $lookup: {
+          from: "tasks",
+          let: {
+            employeeIds: "$employees._id",
+          },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $in: ["$assignedTo", "$$employeeIds"],
+                },
+              },
+            },
+          ],
+          as: "tasks",
+        },
+      },
+    
+      {
+        $addFields: {
+          totalEmployees: {
+            $size: "$employees",
+          },
+    
+          totalTasks: {
+            $size: "$tasks",
+          },
+    
+          completedTasks: {
+            $size: {
+              $filter: {
+                input: "$tasks",
+                as: "task",
+                cond: {
+                  $eq: ["$$task.status", "completed"],
+                },
+              },
+            },
+          },
+        },
+      },
+    
+      {
+        $project: {
+          _id: 0,
+          departmentId: "$_id",
+          department: "$name",
+          totalEmployees: 1,
+          totalTasks: 1,
+          completedTasks: 1,
+    
+          performancePercentage: {
+            $cond: [
+              { $gt: ["$totalTasks", 0] },
+              {
+                $round: [
+                  {
+                    $multiply: [
+                      {
+                        $divide: [
+                          "$completedTasks",
+                          "$totalTasks",
+                        ],
+                      },
+                      100,
+                    ],
+                  },
+                  0,
+                ],
+              },
+              0,
+            ],
+          },
+        },
+      },
+    
+      {
+        $sort: {
+          performancePercentage: -1,
+        },
+      },
+    ]);
+    
+    // console.log(performanceCountByDepartment);
+
+    const taskStatusCount = await Task.aggregate([
+      {
+        $match: {
+          companyId: new mongoose.Types.ObjectId(companyId),
+        },
+      },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+    
+    // console.log(taskStatusCount);
+
     res.status(200).json({
       success: true,
       data: {
@@ -668,7 +846,7 @@ console.log("employeesByDepartment:",employeesByDepartment)
             may: 0,
           },
 
-          departmentLeave: employeesByDepartment,
+          departmentLeave: employeeLeaveCountByDepartment,
           leaveSummaryByDepartment: summaryByDepartment,
         },
 
@@ -744,12 +922,12 @@ console.log("employeesByDepartment:",employeesByDepartment)
           topPerformers: 0,
           improvementPlan: 0,
 
-          departmentPerformance: employeesByDepartment,
+          departmentPerformance: performanceCountByDepartment,
 
           goalCompletion: {
-            completed: 0,
-            inProgress: 0,
-            pending: 0,
+            completed: taskStatusCount.find((item) => item._id === "completed")?.count || 0,
+            inProgress: taskStatusCount.find((item) => item._id === "started")?.count || 0,
+            pending: taskStatusCount.find((item) => item._id === "assigned")?.count || 0,
           },
 
           performanceSummaryByDepartment: summaryByDepartment,
