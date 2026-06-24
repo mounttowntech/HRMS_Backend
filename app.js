@@ -64,6 +64,7 @@ app.use("/api/clients",require("./src/routes/clientRoutes"));
 app.use("/api/onboarding-documents",require("./src/routes/onboardingDocumentRoutes"));
 app.use("/api/holiday",require("./src/routes/holidayRoutes"));
 app.use("/api/attendance-requests",require("./src/routes/attendanceRequestRoutes"));
+app.use("/api/hiring",require("./src/routes/hiringUpdateRoutes"));
 app.use(express.static(path.join(__dirname, "build")));
 
 app.use((req, res) => {
