@@ -372,15 +372,32 @@ exports.createEmployeeFromCandidate =
       // EMPLOYEE COUNT
       // ==========================================
 
-      const count =
-        await Employee.countDocuments(
-          {
-            companyId:
-              req.user.companyId,
-          }
-        );
+      // const count =
+      //   await Employee.countDocuments(
+      //     {
+      //       companyId:
+      //         req.user.companyId,
+      //     }
+      //   );
+      const lastEmployee = await Employee.findOne({
+        companyId: req.user.companyId,
+        employeeCode: { $regex: /^EMP\d+$/ },
+      })
+        .sort({ employeeCode: -1 })
+        .select("employeeCode");
+      
+      let nextNumber = 1;
+      
+      if (lastEmployee?.employeeCode) {
+        const lastNumber = Number(lastEmployee.employeeCode.replace("EMP", ""));
+        nextNumber = lastNumber + 1;
+      }
+      
+      const employeeCode = `EMP${String(nextNumber).padStart(4, "0")}`;
+      
+      console.log("New Employee Code:", employeeCode);
 
-      // ==========================================
+      // ========================================== 
       // CREATE EMPLOYEE
       // ==========================================
 
@@ -389,9 +406,7 @@ exports.createEmployeeFromCandidate =
           companyId:
             req.user.companyId,
 
-          employeeCode: `EMP${String(
-            count + 1
-          ).padStart(4, "0")}`,
+          employeeCode: employeeCode,
 
           fullName: c.fullName,
 
