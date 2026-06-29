@@ -493,3 +493,88 @@ exports.deletePermission = async (req, res) => {
     });
   }
 };
+exports.getMyPermissions = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    const userId = req.user.id || req.user.userId;
+
+    // Find logged-in employee
+    const employee = await Employee.findOne({
+      userId,
+      companyId,
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const {
+      month,
+      year,
+      approvalStatus,
+      status,
+      page = 1,
+      limit = 10,
+    } = req.query;
+
+    const query = {
+      companyId,
+      employee: employee._id,
+    };
+
+    if (month) query.month = Number(month);
+    if (year) query.year = Number(year);
+    if (approvalStatus) query.approvalStatus = approvalStatus;
+    if (status) query.status = status;
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [permissions, totalRecords] = await Promise.all([
+      Permission.find(query)
+        .populate({
+          path: "employee",
+          select:
+            "employeeCode fullName email departmentId designationId shiftId role status",
+          populate: [
+            {
+              path: "departmentId",
+              select: "name",
+            },
+            {
+              path: "designationId",
+              select: "name",
+            },
+            {
+              path: "shiftId",
+              select: "shiftName",
+            },
+          ],
+        })
+        .populate("approvedBy", "name email role")
+        .sort({ permissionDate: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+
+      Permission.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      totalRecords,
+      totalPages: Math.ceil(totalRecords / Number(limit)),
+      currentPage: Number(page),
+      permissions,
+    });
+  } catch (error) {
+    console.log("GET MY PERMISSIONS ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
