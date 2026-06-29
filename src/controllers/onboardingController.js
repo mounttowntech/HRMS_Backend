@@ -25,10 +25,10 @@ exports.startOnboarding = async (req, res) => {
       });
     }
 
-    if (candidate.status !== "selected") {
+    if (candidate.status !== "selected" && candidate.status !== "employee_created") {
       return res.status(400).json({
         success: false,
-        message: "Only selected candidates can start onboarding",
+        message: "Only selected or employee created candidates can start onboarding",
       });
     }
 

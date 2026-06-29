@@ -13,13 +13,13 @@ router.post(
   employeeController.createEmployee
 );
 
-router.get("/all", verifyToken,allowRoles("admin","projectmanager","teamlead","employee"), employeeController.getEmployees);
+router.get("/all", verifyToken,allowRoles("admin", "hr", "projectmanager","teamlead","employee"), employeeController.getEmployees);
 router.get("/:id", verifyToken, employeeController.getEmployeeById);
 
 router.put(
   "/:id",
   verifyToken,
-  allowRoles("admin","projectmanager","teamlead"),
+  allowRoles("admin", "hr", "projectmanager","teamlead"),
   profileUpload.single("profileImage"),
   employeeController.updateEmployee
 );
