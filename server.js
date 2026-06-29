@@ -40,10 +40,10 @@ logStep("STEP 3: mongoose loaded");
 const app = require("./app");
 logStep("STEP 4: app.js loaded");
 
-fs.writeFileSync(
-  path.join(__dirname, "startup-test.txt"),
-  "mountcentric started " + new Date()
-);
+// fs.writeFileSync(
+//   path.join(__dirname, "startup-test.txt"),
+//   "mountcentric started " + new Date()
+// );
 logStep("STEP 5: startup-test created");
 
 const PORT = process.env.PORT || 3000;

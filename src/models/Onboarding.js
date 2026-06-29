@@ -29,7 +29,7 @@ const schema = new mongoose.Schema(
     accountSetup: { type: Boolean, default: false },
     status: {
       type: String,
-      enum: ["started", "admin_access", "completed"],
+      enum: ["started", "admin_access", "completed","hr_verification"],
       default: "started",
     },
 

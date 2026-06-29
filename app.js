@@ -68,10 +68,14 @@ app.use("/api/onboarding-documents",require("./src/routes/onboardingDocumentRout
 app.use("/api/holiday",require("./src/routes/holidayRoutes"));
 app.use("/api/attendance-requests",require("./src/routes/attendanceRequestRoutes"));
 app.use("/api/hiring",require("./src/routes/hiringUpdateRoutes"));
+app.use("/api/permissions",require("./src/routes/permissionRoutes"));
 app.use(express.static(path.join(__dirname, "build")));
 
-app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "build", "index.html"));
-});
+console.log("UPLOAD PATH:", path.join(process.cwd(), "uploads"));
+
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"))
+);
 module.exports = app;
 
