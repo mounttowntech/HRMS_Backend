@@ -11,6 +11,7 @@ const {
   rejectPermission,
   updatePermission,
   deletePermission,
+  getMyPermissions
 } = require("../controllers/permissionController");
 
 const {
@@ -43,7 +44,18 @@ router.get(
   ),
   getAllPermissions
 );
-
+router.get(
+  "/my-permissions",
+  verifyToken,
+  allowRoles(
+    "employee",
+    "teamlead",
+    "projectmanager",
+    "hr",
+    "admin"
+  ),
+  getMyPermissions
+);
 router.get(
   "/monthly-summary",
   verifyToken,
@@ -69,6 +81,7 @@ router.get(
   ),
   getPermissionById
 );
+
 
 router.put(
   "/:id",
