@@ -68,6 +68,7 @@ app.use("/api/onboarding-documents",require("./src/routes/onboardingDocumentRout
 app.use("/api/holiday",require("./src/routes/holidayRoutes"));
 app.use("/api/attendance-requests",require("./src/routes/attendanceRequestRoutes"));
 app.use("/api/hiring",require("./src/routes/hiringUpdateRoutes"));
+app.use("/api/permissions",require("./src/routes/permissionRoutes"));
 app.use(express.static(path.join(__dirname, "build")));
 
 console.log("UPLOAD PATH:", path.join(process.cwd(), "uploads"));
