@@ -227,6 +227,11 @@ const calculateBreakDetails = (attendance) => {
     actualBreakMinutes,
     extraBreakMinutes:
       actualBreakMinutes > 60 ? actualBreakMinutes - 60 : 0,
+      breaks: attendance?.breaks?.map((item) => ({
+        breakIn: item.breakIn,
+        breakOut: item.breakOut,
+        minutes: item.minutes,
+      })),
   };
 };
 
