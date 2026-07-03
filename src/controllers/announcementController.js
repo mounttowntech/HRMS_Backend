@@ -1,4 +1,5 @@
 const Announcement = require("../models/announcementsModel");
+const { sendNotificationToRoles } = require("../utils/notificationHelper");
 
 // CREATE ANNOUNCEMENT
 exports.createAnnouncement = async (req, res) => {
@@ -21,6 +22,19 @@ exports.createAnnouncement = async (req, res) => {
       status: "active",
       createdBy: req.user.id || req.user.userId,
     });
+
+    const notifyRoles = ["admin","teamlead", "projectmanager", "hr", "employee"];
+    
+        await sendNotificationToRoles({
+              companyId: req.user.companyId,
+              senderId: req.user.userId || req.user.id,
+              roles: notifyRoles,
+              title: `New Announcement: ${title}`,
+              message: `A new announcement has been posted: ${title}`,
+              type: "announcement",
+              referenceId: announcement._id,
+              referenceModel: "Announcement",
+            });
 
     res.status(201).json({
       success: true,

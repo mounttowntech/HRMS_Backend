@@ -1,8 +1,11 @@
 const Holiday = require("../models/holiday");
+const {sendNotificationToRoles } = require("../utils/notificationHelper");
+const getUserId = (req) => req.user?.userId || req.user?.id;
 
 exports.createHoliday = async (req, res) => {
   try {
     const { name, date, type, description } = req.body;
+     const userId = getUserId(req);
 
     const holiday = await Holiday.create({
       companyId: req.user.companyId,
@@ -11,6 +14,18 @@ exports.createHoliday = async (req, res) => {
       type,
       description,
     });
+
+    const notifyRoles = ["admin","teamlead", "projectmanager", "hr", "employee"];
+    await sendNotificationToRoles({
+          companyId: req.user.companyId,
+          senderId: userId,
+          roles: notifyRoles,
+          title: `New Holiday: ${name}`,
+          message: `A new holiday has been added: ${name} on ${new Date(date).toLocaleDateString()}.`,
+          type: "general",
+          referenceId: holiday._id,
+          referenceModel: "Holiday",
+        });
 
     res.status(201).json({
       success: true,

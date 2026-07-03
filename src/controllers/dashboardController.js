@@ -427,6 +427,35 @@ exports.getTeamLeadDashboard = async (req, res) => {
     const companyId = req.user.companyId;
     const teamLeadId = req.user.employeeId;
 
+    const { start, end } = getISTMonthRange();
+    const presentDays = await Attendance.countDocuments({
+      companyId,
+      employeeId: teamLeadId,
+      date: { $gte: start, $lte: end },
+      status: "present",
+    });
+
+    const absentDays = await Attendance.countDocuments({
+      companyId,
+      employeeId: teamLeadId,
+      date: { $gte: start, $lte: end },
+      status: "absent",
+    });
+
+    const lateEntries = await Attendance.countDocuments({
+      companyId,
+      employeeId: teamLeadId,
+      date: { $gte: start, $lte: end },
+      isLate: true,
+    });
+
+    const workFromHome = await Attendance.countDocuments({
+      companyId,
+      employeeId: teamLeadId,
+      date: { $gte: start, $lte: end },
+      workMode: "wfh",
+    });
+
       //find projects assigned to team lead
       const projects = await Project.find({
         companyId,
@@ -458,6 +487,22 @@ exports.getTeamLeadDashboard = async (req, res) => {
       .select("fullName employeeCode departmentId status")
       .lean();
 
+      const tasks = await Task.find({
+      companyId,
+      assignedTo: { $in: teamMemberIds },
+    })
+      .sort({ dueDate: 1 })
+      .limit(6)
+      .lean();
+
+       const announcements = await Announcement.find({
+      companyId,
+      status: "active",
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+
     res.status(200).json({
       success: true,
       data: {
@@ -473,6 +518,36 @@ exports.getTeamLeadDashboard = async (req, res) => {
           department: member.departmentId?.name || "N/A",
           status: member.status,
         })) : [],
+
+        myAttendance: {
+          presentDays: {
+            count: presentDays,
+            percentage: percentage(presentDays, 30),
+          },
+          absentDays: {
+            count: absentDays,
+            percentage: percentage(absentDays, 30),
+          },
+          lateEntries: {
+            count: lateEntries,
+            percentage: percentage(lateEntries, 30),
+          },
+          workFromHome: {
+            count: workFromHome,
+            percentage: percentage(workFromHome, 30),
+          },
+        },
+        announcements: announcements.map((item) => ({
+          title: item.title,
+          description: item.description,
+          date: item.createdAt,
+        })),
+        myTasks: tasks.map((task) => ({
+          name: task.title || task.taskName,
+          level: task.priority || "medium",
+          date: task.dueDate,
+          completed: task.status === "completed",
+        })),
       },
     });
   } catch (error) {

@@ -12,7 +12,7 @@ const sendNotificationToRoles = async ({
   referenceModel,
 }) => {
   try {
-    roles = [...new Set(roles)].filter((role) => role !== "employee");
+    // roles = [...new Set(roles)].filter((role) => role !== "employee");
 
     const users = await User.find({
       companyId,
