@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
 const PermissionRequest = require("../models/permissionRequest");
+const calculateLateMinutesByShift = require("../utils/shiftAttendanceDate").calculateLateMinutesByShift;
 
 const {
   getISTDateString,
@@ -1156,7 +1157,7 @@ exports.getAttendance = async (req, res) => {
       )
       .populate("departmentId", "name departmentName")
       .populate("designationId", "name designationName")
-      .populate("shiftId", "shiftName name")
+      .populate("shiftId", "shiftName name startTime graceMinutes")
       .lean();
 
     if (!employees.length) {
@@ -1296,8 +1297,11 @@ exports.getAttendance = async (req, res) => {
 
         const breakDetails = calculateBreakDetails(attendanceData);
 
+        const shiftStartTime = emp.shiftId?.startTime || "09:30";
+        const graceMinutes = emp.shiftId?.graceMinutes || 0;
+
         const lateMinutes = attendanceData?.punchIn
-          ? calculateLateMinutes(currentDate, attendanceData.punchIn)
+          ? calculateLateMinutesByShift(currentDate, attendanceData.punchIn, shiftStartTime, graceMinutes)
           : 0;
 
         attendance.push({
