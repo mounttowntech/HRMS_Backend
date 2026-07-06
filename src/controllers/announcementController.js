@@ -30,7 +30,7 @@ exports.createAnnouncement = async (req, res) => {
               senderId: req.user.userId || req.user.id,
               roles: notifyRoles,
               title: `New Announcement: ${title}`,
-              message: `A new announcement has been posted: ${title}`,
+              message: description,
               type: "announcement",
               referenceId: announcement._id,
               referenceModel: "Announcement",

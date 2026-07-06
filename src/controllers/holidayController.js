@@ -21,7 +21,7 @@ exports.createHoliday = async (req, res) => {
           senderId: userId,
           roles: notifyRoles,
           title: `New Holiday: ${name}`,
-          message: `A new holiday has been added: ${name} on ${new Date(date).toLocaleDateString()}.`,
+          message: description,
           type: "general",
           referenceId: holiday._id,
           referenceModel: "Holiday",
@@ -46,7 +46,7 @@ exports.getHolidays = async (req, res) => {
     const holidays = await Holiday.find({
       companyId: req.user.companyId,
       status: "active",
-    }).sort({ date: 1 });
+    }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -68,7 +68,7 @@ exports.getUpcomingHolidays = async (req, res) => {
       status: "active",
       date: { $gte: new Date() },
     })
-      .sort({ date: 1 })
+      .sort({ createdAt: -1 })
       .limit(5);
 
     res.status(200).json({
