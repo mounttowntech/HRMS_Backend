@@ -2235,6 +2235,7 @@ exports.getAttendanceCalendarView = async (req, res) => {
               totalBreakMinutes: attendance.totalBreakMinutes,
 
               status: attendance.status,
+              breaks: attendance.breaks || [],
 
             }
 
