@@ -1,6 +1,7 @@
 const DEFAULT_BREAK_MINUTES = 60;
 const FULL_DAY_MINUTES = 480; // 8 hours
 const HALF_DAY_MINUTES = 240; // 4 hours
+const FULL_DAY_GRACE = 5; // 5 minutes
 
 exports.minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
@@ -47,7 +48,17 @@ exports.calculateAttendance = (attendance) => {
         ? attendance.workingMinutes - FULL_DAY_MINUTES
         : 0;
 
-    if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
+    // if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
+    //   attendance.status = "present";
+    //   attendance.session = "full_day";
+    // } else if (attendance.workingMinutes <= HALF_DAY_MINUTES) {
+    //   attendance.status = "half_day";
+    //   attendance.session = "half_day";
+    // } else {
+    //   attendance.status = "absent";
+    //   attendance.session = "absent";
+    // }
+    if (attendance.workingMinutes >= (FULL_DAY_MINUTES - FULL_DAY_GRACE)) {
       attendance.status = "present";
       attendance.session = "full_day";
     } else if (attendance.workingMinutes >= HALF_DAY_MINUTES) {

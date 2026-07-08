@@ -16,7 +16,7 @@ router.post("/create", verifyToken, allowRoles("admin"), createRole);
 router.get(
   "/all",
   verifyToken,
-  allowRoles("admin", "hr"),
+  allowRoles("admin", "hr", "projectmanager"),
   getRoles
 );
 
