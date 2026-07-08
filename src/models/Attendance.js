@@ -1,9 +1,12 @@
 const mongoose = require("mongoose");
+const deviceInfoSchema = require("./deviceInfo");
 
 const breakSchema = new mongoose.Schema(
   {
     breakIn: Date,
     breakOut: Date,
+    breakInDevice: deviceInfoSchema,
+    breakOutDevice: deviceInfoSchema,
 
     minutes: {
       type: Number,
@@ -112,6 +115,9 @@ const attendanceSchema = new mongoose.Schema(
       enum: ["employee_login", "biometric", "google_login", "regularization"],
       default: "employee_login",
     },
+
+    punchInDevice: deviceInfoSchema,
+    punchOutDevice: deviceInfoSchema,
   },
   { timestamps: true }
 );

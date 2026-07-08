@@ -21,6 +21,8 @@ const {
 const {
   getAttendanceDateByShift,
 } = require("../utils/shiftAttendanceDate");
+
+const { getDeviceInfo } = require("../utils/deviceInfo");
 // ======================================================
 // DATE HELPERS
 // ======================================================
@@ -232,6 +234,8 @@ const calculateBreakDetails = (attendance) => {
         breakIn: item.breakIn,
         breakOut: item.breakOut,
         minutes: item.minutes,
+        breakInDevice: item.breakInDevice || null,
+        breakOutDevice: item.breakOutDevice || null,
       })),
   };
 };
@@ -288,6 +292,7 @@ exports.employeePunchIn = async (req, res) => {
     attendance.punchInSource = "employee_login";
     attendance.shiftName = shiftName;
     attendance.status = "present";
+    attendance.punchInDevice = getDeviceInfo(req);
 
     await attendance.save();
 
@@ -451,7 +456,7 @@ exports.employeePunchOut = async (req, res) => {
     attendance.shiftName = attendance.shiftName || shiftName;
     attendance.punchOut = new Date();
     attendance.punchOutSource = "employee_login";
-
+    attendance.punchOutDevice = getDeviceInfo(req);
     console.log("Calculating attendance for punch out...",attendance);
 
     calculateAttendance(attendance);
@@ -608,6 +613,7 @@ exports.startBreak = async (req, res) => {
     attendance.breaks.push({
       breakIn: new Date(),
       source: "employee_login",
+      breakInDevice: getDeviceInfo(req),
     });
 
     await attendance.save();
@@ -751,6 +757,7 @@ exports.endBreak = async (req, res) => {
     }
 
     lastBreak.breakOut = new Date();
+    lastBreak.breakOutDevice = getDeviceInfo(req);
 
     lastBreak.minutes = minutesDiff(
       lastBreak.breakIn,
@@ -1335,6 +1342,8 @@ exports.getAttendance = async (req, res) => {
           totalBreakMinutes: attendanceData?.totalBreakMinutes || 0,
 
           break: breakDetails,
+          punchInDevice: attendanceData?.punchInDevice || null,
+          punchOutDevice: attendanceData?.punchOutDevice || null,
 
           late: {
             isLate: lateMinutes > 0,
@@ -2236,6 +2245,8 @@ exports.getAttendanceCalendarView = async (req, res) => {
 
               status: attendance.status,
               breaks: attendance.breaks || [],
+              punchInDevice: attendance.punchInDevice || null,
+              punchOutDevice: attendance.punchOutDevice || null
 
             }
 
