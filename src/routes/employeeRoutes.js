@@ -8,7 +8,7 @@ const profileUpload = require("../middleware/upload");
 router.post(
   "/create",
   verifyToken,
-  allowRoles("admin","projectmanager","teamlead"),
+  allowRoles("admin","projectmanager","teamlead", "hr"),
   profileUpload.single("profileImage"),
   employeeController.createEmployee
 );

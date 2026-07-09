@@ -1256,8 +1256,18 @@ exports.getAttendance = async (req, res) => {
     });
 
     const leaveMap = {};
+    // leaveRecords.forEach((item) => {
+    //   leaveMap[item.employeeId.toString()] = item;
+    // });
+
     leaveRecords.forEach((item) => {
-      leaveMap[item.employeeId.toString()] = item;
+      const empId = item.employeeId.toString();
+
+      if (!leaveMap[empId]) {
+        leaveMap[empId] = [];
+      }
+
+      leaveMap[empId].push(item);
     });
 
     const permissionMap = {};
@@ -1279,7 +1289,13 @@ exports.getAttendance = async (req, res) => {
         const key = `${empId}_${currentDate}`;
 
         const attendanceData = attendanceMap[key];
-        const leave = leaveMap[empId];
+        // const leave = leaveMap[empId];
+        const leave = leaveMap[empId]?.find((l) => {
+        const from = new Date(l.fromDate).toISOString().split("T")[0];
+        const to = new Date(l.toDate).toISOString().split("T")[0];
+
+        return currentDate >= from && currentDate <= to;
+      }) || null;
         const permission = permissionMap[empId];
 
         const employeeShiftName =
@@ -1294,13 +1310,21 @@ exports.getAttendance = async (req, res) => {
 
         let status = "absent";
 
-        if (leave) {
-          status = "leave";
-        } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
-          status = "working";
-        } else if (attendanceData?.status) {
-          status = attendanceData.status;
-        }
+        // if (leave) {
+        //   status = "leave";
+        // } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
+        //   status = "working";
+        // } else if (attendanceData?.status) {
+        //   status = attendanceData.status;
+        // }
+
+      if (attendanceData?.punchIn && !attendanceData?.punchOut) {
+        status = "working";
+      } else if (attendanceData?.status) {
+        status = attendanceData.status;
+      } else if (leave) {
+        status = "leave";
+      }
 
         const breakDetails = calculateBreakDetails(attendanceData);
 
