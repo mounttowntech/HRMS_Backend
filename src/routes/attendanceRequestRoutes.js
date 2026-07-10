@@ -24,14 +24,14 @@ router.get(
 router.get(
   "/",
   verifyToken,
-  allowRoles("hr", "admin", "employer"),
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager"),
   c.getAttendanceRequests
 );
 
 router.patch(
   "/:id/status",
   verifyToken,
-  allowRoles("hr", "admin", "employer"),
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager", "employee"),
   c.updateAttendanceRequestStatus
 );
 

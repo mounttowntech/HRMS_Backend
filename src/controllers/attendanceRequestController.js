@@ -236,12 +236,12 @@ exports.getMyAttendanceRequests = async (req, res) => {
 
 exports.updateAttendanceRequestStatus = async (req, res) => {
   try {
-    const { status, remarks } = req.body;
+    const { status, remarks, requestType, attendanceDate, breakIn, breakMinutes, breakOut, requestedPunchIn, requestedPunchOut, reason } = req.body;
 
-    if (!["approved", "rejected"].includes(status)) {
+    if (!["approved", "rejected", "pending"].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "status must be approved or rejected",
+        message: "status must be approved, rejected or pending",
       });
     }
 
@@ -267,7 +267,15 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
     request.status = status;
     request.remarks = remarks || "";
     request.approvedBy = getUserId(req);
-
+    request.requestType = requestType || null;
+    request.attendanceDate = attendanceDate || null;
+    request.breakIn = breakIn || null;
+    request.breakMinutes = breakMinutes || 0;
+    request.breakOut = breakOut || null;
+    request.requestedPunchIn = requestedPunchIn || null;
+    request.requestedPunchOut = requestedPunchOut || null;
+    request.reason = reason || null;
+console.log("Updated request:", request);
     if (status === "approved") {
       const dateStart = new Date(`${request.attendanceDate}T00:00:00+05:30`);
 
@@ -354,7 +362,7 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Attendance request ${status} successfully`,
+      message: `Attendance request updated successfully`,
       data: request,
     });
   } catch (error) {
