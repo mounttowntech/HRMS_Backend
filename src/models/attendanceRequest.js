@@ -57,6 +57,11 @@ const attendanceRequestSchema = new mongoose.Schema(
       default: 0,
     },
 
+    breakIndex: {
+      type: Number,
+      default: null,
+    },
+
     reason: {
       type: String,
       required: true,

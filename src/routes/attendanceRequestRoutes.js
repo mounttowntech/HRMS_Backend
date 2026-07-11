@@ -35,4 +35,12 @@ router.patch(
   c.updateAttendanceRequestStatus
 );
 
+//get attendance data use by attendance date
+router.get(
+  "/attendance-data/:date",
+  verifyToken,
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager"),
+  c.getAttendanceDataByDate
+);
+
 module.exports = router;

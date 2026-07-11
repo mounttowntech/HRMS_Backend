@@ -1,6 +1,7 @@
 const AttendanceRequest = require("../models/attendanceRequest");
 const Attendance = require("../models/Attendance");
 const Employee = require("../models/Employee");
+const Project = require("../models/Project");
 
 const {
   calculateAttendance,
@@ -45,8 +46,9 @@ exports.createAttendanceRequest = async (req, res) => {
       breakIn,
       breakOut,
       reason,
+      breakIndex,
     } = req.body;
-
+console.log("req.body:", req.body);
     if (!requestType || !attendanceDate || !reason) {
       return res.status(400).json({
         success: false,
@@ -131,7 +133,7 @@ exports.createAttendanceRequest = async (req, res) => {
         message: "Pending request already exists for this date",
       });
     }
-
+console.log("breakindex_find:", breakIndex);
     const request = await AttendanceRequest.create({
       companyId: req.user.companyId,
       employeeId: employee._id,
@@ -142,6 +144,7 @@ exports.createAttendanceRequest = async (req, res) => {
       breakIn: breakIn || null,
       breakOut: breakOut || null,
       breakMinutes: calculateBreakMinutes(breakIn, breakOut),
+      breakIndex: breakIndex ?? null,
       reason,
       status: "pending",
     });
@@ -176,10 +179,63 @@ exports.getAttendanceRequests = async (req, res) => {
     const filter = {
       companyId: req.user.companyId,
     };
-
+console.log("req.query:", req.user);
     if (req.query.status) filter.status = req.query.status;
-    if (req.query.employeeId) filter.employeeId = req.query.employeeId;
+    // if (req.query.employeeId) filter.employeeId = req.query.employeeId;
 
+    //get employee request for team lead based on projects assigned to team lead
+     const employee = await Employee.findOne({
+        userId: getUserId(req),
+        companyId: req.user.companyId,
+      });
+      console.log("employee:", employee);
+    if (req.user.role === "teamlead") {
+     
+
+        const teamLeadProjects = await Project.find({
+          companyId: req.user.companyId,
+          teamlead: employee._id,
+        }).select("_id teamMembers");
+
+     //get teammembers requests based on projects assigned to team lead
+      const teamMemberIds = teamLeadProjects.reduce((acc, project) => {
+        return acc.concat(project.teamMembers);
+      }, []);
+
+      filter.employeeId = { $in: teamMemberIds , $nin: [employee._id] };
+
+    }else if(req.user.role === "projectmanager"){
+      const projectManagerProjects = await Project.find({
+        companyId: req.user.companyId,
+        projectmanager: employee._id,
+      }).select("_id teamMembers");
+console.log("projectManagerProjects:", projectManagerProjects);
+      const teamMemberIds = projectManagerProjects.reduce((acc, project) => {
+        return acc.concat(project.teamMembers);
+      }, []);
+
+      filter.employeeId = { $in: teamMemberIds, $nin: [employee._id] };
+
+    }
+
+
+
+
+
+    // if (  ["hr", "admin", "employer", "teamlead", "projectmanager"].includes(req.user.role)) {
+    //   const employee = await Employee.findOne({
+    //     userId: getUserId(req),
+    //     companyId: req.user.companyId,
+    //   });
+
+    //   if (employee) {
+    //     filter.employeeId = {
+    //       $nin: [employee._id],
+    //     };
+    //   }
+    // }
+
+console.log("filter:", filter);
     const requests = await AttendanceRequest.find(filter)
       .populate("employeeId", "fullName employeeCode email")
       .populate("approvedBy", "userName email role")
@@ -236,7 +292,7 @@ exports.getMyAttendanceRequests = async (req, res) => {
 
 exports.updateAttendanceRequestStatus = async (req, res) => {
   try {
-    const { status, remarks, requestType, attendanceDate, breakIn, breakMinutes, breakOut, requestedPunchIn, requestedPunchOut, reason } = req.body;
+    const { status, remarks, requestType, attendanceDate, breakIn, breakMinutes, breakOut, requestedPunchIn, requestedPunchOut, reason, breakIndex } = req.body;
 
     if (!["approved", "rejected", "pending"].includes(status)) {
       return res.status(400).json({
@@ -248,7 +304,7 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
     const request = await AttendanceRequest.findOne({
       _id: req.params.id,
       companyId: req.user.companyId,
-    }).populate("employeeId", "fullName userId employeeCode email shiftId");
+    }).populate("employeeId", "fullName userId employeeCode email shiftId breaks");
 
     if (!request) {
       return res.status(404).json({
@@ -275,6 +331,8 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
     request.requestedPunchIn = requestedPunchIn || null;
     request.requestedPunchOut = requestedPunchOut || null;
     request.reason = reason || null;
+    request.breakIndex = breakIndex ?? request.breakIndex;
+
 console.log("Updated request:", request);
     if (status === "approved") {
       const dateStart = new Date(`${request.attendanceDate}T00:00:00+05:30`);
@@ -306,33 +364,52 @@ console.log("Updated request:", request);
         attendance.punchOutSource = "regularization";
       }
 
-      if (
-        ["forgot_break_start", "break_correction"].includes(request.requestType)
-      ) {
-        attendance.breaks.push({
-          breakIn: request.breakIn,
-          breakOut: request.breakOut,
-          minutes: request.breakMinutes,
-          source: "regularization",
-        });
+      // if (
+      //   ["forgot_break_start", "break_correction", "forgot_break_end"].includes(request.requestType)
+      // ) {
+      //   attendance.breaks.push({
+      //     breakIn: request.breakIn,
+      //     breakOut: request.breakOut,
+      //     minutes: request.breakMinutes,
+      //     source: "regularization",
+      //   });
+      // }
+
+      // if (request.requestType === "forgot_break_end") {
+      //   const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+
+      //   if (!lastBreak || lastBreak.breakOut) {
+      //     return res.status(400).json({
+      //       success: false,
+      //       message: "No active break found to close",
+      //     });
+      //   }
+
+      //   lastBreak.breakOut = request.breakOut;
+      //   lastBreak.minutes = calculateBreakMinutes(
+      //     lastBreak.breakIn,
+      //     request.breakOut
+      //   );
+      //   lastBreak.source = "regularization";
+      // }
+
+      if (request.requestType === "forgot_break_start") {
+        attendance.breaks[request.breakIndex].breakIn = request.breakIn;
+      }
+console.log("breakOut:", request.breakOut,breakIndex);
+      if (request.requestType === "forgot_break_end") {
+        attendance.breaks[request.breakIndex].breakOut = request.breakOut;
       }
 
-      if (request.requestType === "forgot_break_end") {
-        const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+      if (request.requestType === "break_correction") {
+        attendance.breaks[request.breakIndex].breakIn = request.breakIn;
+        attendance.breaks[request.breakIndex].breakOut = request.breakOut;
+      }
 
-        if (!lastBreak || lastBreak.breakOut) {
-          return res.status(400).json({
-            success: false,
-            message: "No active break found to close",
-          });
-        }
-
-        lastBreak.breakOut = request.breakOut;
-        lastBreak.minutes = calculateBreakMinutes(
-          lastBreak.breakIn,
-          request.breakOut
-        );
-        lastBreak.source = "regularization";
+      const br = attendance.breaks[request.breakIndex];
+console.log("attendance_data:", attendance);
+      if (br.breakIn && br.breakOut) {
+        br.minutes = calculateBreakMinutes(br.breakIn, br.breakOut);
       }
 
       calculateAttendance(attendance);
@@ -369,6 +446,37 @@ console.log("Updated request:", request);
     res.status(500).json({
       success: false,
       message: "Failed to update attendance request",
+      error: error.message,
+    });
+  }
+};
+
+//get attendance data use by attendance date
+exports.getAttendanceDataByDate = async (req, res) => {
+  try {
+    console.log("req.params:", req.user);
+    const { date } = req.params;
+    const filter = {
+      companyId: req.user.companyId,
+      attendanceDate: date,
+      employeeId: req.user?.employeeId || null,
+    };
+    const attendanceData = await Attendance.findOne(filter);
+    if (!attendanceData || attendanceData.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No attendance data found for the given date",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Attendance data retrieved successfully",
+      data: attendanceData,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve attendance data",
       error: error.message,
     });
   }

@@ -150,6 +150,10 @@ const employeeSchema = new mongoose.Schema(
         type: Number,
         default: 15,
       },
+      paid: {
+        type: Number,
+        default: 1,
+      },
     },
   },
   { timestamps: true },

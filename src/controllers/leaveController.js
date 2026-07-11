@@ -73,10 +73,13 @@ exports.applyLeave = async (req, res) => {
         message: "fromDate cannot be greater than toDate",
       });
     }
-
+console.log("balanceleavebal:", emp.leaveBalance, "leaveType:", leaveType);
+console.log("leaveType:", leaveType);
+console.log("Keys:", Object.keys(emp.leaveBalance));
+console.log("Value:", emp.leaveBalance[leaveType]);
     const days = calculateDays(fromDate, toDate);
     const balance = emp.leaveBalance?.[leaveType] || 0;
-
+console.log("balanceleave:", balance, "days:", days);
     const documents =
       req.files?.map((file) => ({
         documentType: documentType || "other",
@@ -84,10 +87,9 @@ exports.applyLeave = async (req, res) => {
         fileUrl: `/uploads/leaves/${file.filename}`,
         mimeType: file.mimetype,
       })) || [];
-console.log("balance leave is :", {
-  balance,
-  days,
-});
+
+
+console.log('balance:',balance, 'days:',days);
     if (balance < days) {
       const leave = await Leave.create({
         companyId: req.user.companyId,
