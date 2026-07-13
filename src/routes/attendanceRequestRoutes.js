@@ -39,7 +39,7 @@ router.patch(
 router.get(
   "/attendance-data/:date",
   verifyToken,
-  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager"),
+  allowRoles("hr", "employer", "teamlead", "projectmanager", "employee"),
   c.getAttendanceDataByDate
 );
 

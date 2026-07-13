@@ -48,7 +48,7 @@ exports.createAttendanceRequest = async (req, res) => {
       reason,
       breakIndex,
     } = req.body;
-console.log("req.body:", req.body);
+
     if (!requestType || !attendanceDate || !reason) {
       return res.status(400).json({
         success: false,
@@ -133,7 +133,7 @@ console.log("req.body:", req.body);
         message: "Pending request already exists for this date",
       });
     }
-console.log("breakindex_find:", breakIndex);
+
     const request = await AttendanceRequest.create({
       companyId: req.user.companyId,
       employeeId: employee._id,
@@ -179,7 +179,7 @@ exports.getAttendanceRequests = async (req, res) => {
     const filter = {
       companyId: req.user.companyId,
     };
-console.log("req.query:", req.user);
+
     if (req.query.status) filter.status = req.query.status;
     // if (req.query.employeeId) filter.employeeId = req.query.employeeId;
 
@@ -334,6 +334,88 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
     request.breakIndex = breakIndex ?? request.breakIndex;
 
 console.log("Updated request:", request);
+//     if (status === "approved") {
+//       const dateStart = new Date(`${request.attendanceDate}T00:00:00+05:30`);
+
+//       let attendance = await Attendance.findOne({
+//         companyId: req.user.companyId,
+//         employeeId: request.employeeId._id,
+//         attendanceDate: request.attendanceDate,
+//       });
+
+//       if (!attendance) {
+//         attendance = new Attendance({
+//           companyId: req.user.companyId,
+//           employeeId: request.employeeId._id,
+//           attendanceDate: request.attendanceDate,
+//           date: dateStart,
+//           breaks: [],
+//           attendanceMode: "regularization",
+//         });
+//       }
+
+//       if (request.requestedPunchIn) {
+//         attendance.punchIn = request.requestedPunchIn;
+//         attendance.punchInSource = "regularization";
+//       }
+
+//       if (request.requestedPunchOut) {
+//         attendance.punchOut = request.requestedPunchOut;
+//         attendance.punchOutSource = "regularization";
+//       }
+
+//       // if (
+//       //   ["forgot_break_start", "break_correction", "forgot_break_end"].includes(request.requestType)
+//       // ) {
+//       //   attendance.breaks.push({
+//       //     breakIn: request.breakIn,
+//       //     breakOut: request.breakOut,
+//       //     minutes: request.breakMinutes,
+//       //     source: "regularization",
+//       //   });
+//       // }
+
+//       // if (request.requestType === "forgot_break_end") {
+//       //   const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+
+//       //   if (!lastBreak || lastBreak.breakOut) {
+//       //     return res.status(400).json({
+//       //       success: false,
+//       //       message: "No active break found to close",
+//       //     });
+//       //   }
+
+//       //   lastBreak.breakOut = request.breakOut;
+//       //   lastBreak.minutes = calculateBreakMinutes(
+//       //     lastBreak.breakIn,
+//       //     request.breakOut
+//       //   );
+//       //   lastBreak.source = "regularization";
+//       // }
+
+//       if (request.requestType === "forgot_break_start") {
+//         attendance.breaks[request.breakIndex].breakIn = request.breakIn;
+//       }
+// console.log("breakOut:", request.breakOut,breakIndex);
+//       if (request.requestType === "forgot_break_end") {
+//         attendance.breaks[request.breakIndex].breakOut = request.breakOut;
+//       }
+
+//       if (request.requestType === "break_correction") {
+//         attendance.breaks[request.breakIndex].breakIn = request.breakIn;
+//         attendance.breaks[request.breakIndex].breakOut = request.breakOut;
+//       }
+
+//       const br = attendance.breaks[request.breakIndex];
+// console.log("attendance_data:", attendance);
+//       if (br.breakIn && br.breakOut) {
+//         br.minutes = calculateBreakMinutes(br.breakIn, br.breakOut);
+//       }
+
+//       calculateAttendance(attendance);
+//       await attendance.save();
+//     }
+
     if (status === "approved") {
       const dateStart = new Date(`${request.attendanceDate}T00:00:00+05:30`);
 
@@ -354,6 +436,10 @@ console.log("Updated request:", request);
         });
       }
 
+      // ==============================
+      // Punch Corrections
+      // ==============================
+
       if (request.requestedPunchIn) {
         attendance.punchIn = request.requestedPunchIn;
         attendance.punchInSource = "regularization";
@@ -364,55 +450,86 @@ console.log("Updated request:", request);
         attendance.punchOutSource = "regularization";
       }
 
-      // if (
-      //   ["forgot_break_start", "break_correction", "forgot_break_end"].includes(request.requestType)
-      // ) {
-      //   attendance.breaks.push({
-      //     breakIn: request.breakIn,
-      //     breakOut: request.breakOut,
-      //     minutes: request.breakMinutes,
-      //     source: "regularization",
-      //   });
-      // }
+      // ==============================
+      // Break Corrections
+      // ==============================
 
-      // if (request.requestType === "forgot_break_end") {
-      //   const lastBreak = attendance.breaks[attendance.breaks.length - 1];
+      const breakIndex = Number(request.breakIndex);
+      let currentBreak = attendance.breaks?.[breakIndex];
 
-      //   if (!lastBreak || lastBreak.breakOut) {
-      //     return res.status(400).json({
-      //       success: false,
-      //       message: "No active break found to close",
-      //     });
-      //   }
+      switch (request.requestType) {
+        case "forgot_break_start": {
+          if (currentBreak) {
+            currentBreak.breakIn = request.breakIn;
 
-      //   lastBreak.breakOut = request.breakOut;
-      //   lastBreak.minutes = calculateBreakMinutes(
-      //     lastBreak.breakIn,
-      //     request.breakOut
-      //   );
-      //   lastBreak.source = "regularization";
-      // }
+            if (request.breakOut) {
+              currentBreak.breakOut = request.breakOut;
+            }
 
-      if (request.requestType === "forgot_break_start") {
-        attendance.breaks[request.breakIndex].breakIn = request.breakIn;
+            currentBreak.source = "regularization";
+          } else {
+            attendance.breaks.push({
+              breakIn: request.breakIn,
+              breakOut: request.breakOut || null,
+              source: "regularization",
+            });
+          }
+
+          break;
+        }
+
+        case "forgot_break_end": {
+          if (currentBreak) {
+            currentBreak.breakOut = request.breakOut;
+            currentBreak.source = "regularization";
+          } else {
+            return res.status(400).json({
+              success: false,
+              message: "Break record not found.",
+            });
+          }
+
+          break;
+        }
+
+        case "break_correction": {
+          if (currentBreak) {
+            currentBreak.breakIn = request.breakIn;
+            currentBreak.breakOut = request.breakOut;
+            currentBreak.source = "regularization";
+          } else {
+            attendance.breaks.push({
+              breakIn: request.breakIn,
+              breakOut: request.breakOut,
+              source: "regularization",
+            });
+          }
+
+          break;
+        }
+
+        default:
+          break;
       }
-console.log("breakOut:", request.breakOut,breakIndex);
-      if (request.requestType === "forgot_break_end") {
-        attendance.breaks[request.breakIndex].breakOut = request.breakOut;
-      }
 
-      if (request.requestType === "break_correction") {
-        attendance.breaks[request.breakIndex].breakIn = request.breakIn;
-        attendance.breaks[request.breakIndex].breakOut = request.breakOut;
-      }
+      // ==============================
+      // Recalculate all break minutes
+      // ==============================
 
-      const br = attendance.breaks[request.breakIndex];
-console.log("attendance_data:", attendance);
-      if (br.breakIn && br.breakOut) {
-        br.minutes = calculateBreakMinutes(br.breakIn, br.breakOut);
-      }
+      attendance.breaks.forEach((br) => {
+        if (br.breakIn && br.breakOut) {
+          br.minutes = calculateBreakMinutes(br.breakIn, br.breakOut);
+        } else {
+          br.minutes = 0;
+        }
+      });
+
+      // ==============================
+      // Recalculate Attendance
+      // ==============================
 
       calculateAttendance(attendance);
+
       await attendance.save();
     }
 
@@ -454,7 +571,6 @@ console.log("attendance_data:", attendance);
 //get attendance data use by attendance date
 exports.getAttendanceDataByDate = async (req, res) => {
   try {
-    console.log("req.params:", req.user);
     const { date } = req.params;
     const filter = {
       companyId: req.user.companyId,
