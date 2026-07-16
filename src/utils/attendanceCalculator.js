@@ -1,35 +1,48 @@
 const DEFAULT_BREAK_MINUTES = 60;
-const FULL_DAY_MINUTES = 480; // 8 hours
-const HALF_DAY_MINUTES = 240; // 4 hours
-const FULL_DAY_GRACE = 5; // 5 minutes
+const FULL_DAY_MINUTES = 480; // 8 Hours
+const HALF_DAY_MINUTES = 240; // 4 Hours
+
+/* ==========================================================
+   Minutes Difference
+========================================================== */
 
 exports.minutesDiff = (start, end) => {
-  return Math.floor((new Date(end) - new Date(start)) / 60000);
-};
+  if (!start || !end) return 0;
 
-exports.calculateAttendance = (attendance) => {
-  let actualBreakMinutes = 0;
-  let requiredMinutes = FULL_DAY_MINUTES;
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
 
-  const day = new Date(attendance.attendanceDate)
-  .toLocaleDateString("en-US", { weekday: "long" });
-
-  if (day === "Saturday") {
-    requiredMinutes = 390; // 6 hours 30 minutes
+  if (isNaN(startTime) || isNaN(endTime)) {
+    return 0;
   }
 
-  const halfDayMinutes = requiredMinutes / 2;
+  return Math.max(0, Math.floor((endTime - startTime) / 60000));
+};
 
-  if (attendance.breaks?.length) {
-    actualBreakMinutes = attendance.breaks.reduce((sum, item) => {
-      if (item.minutes) return sum + item.minutes;
+/* ==========================================================
+   Calculate Attendance
+========================================================== */
 
-      if (item.breakIn && item.breakOut) {
-        return sum + exports.minutesDiff(item.breakIn, item.breakOut);
+exports.calculateAttendance = (attendance) => {
+  if (!attendance) return attendance;
+
+  let actualBreakMinutes = 0;
+
+  /* =========================================
+     Calculate Break Minutes
+  ========================================= */
+
+  if (attendance.breaks && attendance.breaks.length > 0) {
+    attendance.breaks.forEach((item) => {
+      if (item.minutes && item.minutes > 0) {
+        actualBreakMinutes += item.minutes;
+      } else if (item.breakIn && item.breakOut) {
+        actualBreakMinutes += exports.minutesDiff(
+          item.breakIn,
+          item.breakOut
+        );
       }
-
-      return sum;
-    }, 0);
+    });
   }
 
   attendance.totalBreakMinutes = Math.max(
@@ -41,6 +54,13 @@ exports.calculateAttendance = (attendance) => {
     actualBreakMinutes > DEFAULT_BREAK_MINUTES
       ? actualBreakMinutes - DEFAULT_BREAK_MINUTES
       : 0;
+
+  /* =========================================
+     Working Minutes
+  ========================================= */
+
+  attendance.workingMinutes = 0;
+  attendance.overtimeMinutes = 0;
 
   if (attendance.punchIn && attendance.punchOut) {
     const totalMinutes = exports.minutesDiff(
@@ -54,45 +74,117 @@ exports.calculateAttendance = (attendance) => {
     );
 
     attendance.overtimeMinutes =
-      attendance.workingMinutes > requiredMinutes
-        ? attendance.workingMinutes - requiredMinutes
+      attendance.workingMinutes > FULL_DAY_MINUTES
+        ? attendance.workingMinutes - FULL_DAY_MINUTES
         : 0;
 
-    // if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
-    //   attendance.status = "present";
-    //   attendance.session = "full_day";
-    // } else if (attendance.workingMinutes <= HALF_DAY_MINUTES) {
-    //   attendance.status = "half_day";
-    //   attendance.session = "half_day";
-    // } else {
-    //   attendance.status = "absent";
-    //   attendance.session = "absent";
-    // }
-    if (attendance.workingMinutes >= (requiredMinutes - FULL_DAY_GRACE)) {
+    /* =========================================
+       Status & Session
+    ========================================= */
+
+    if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
       attendance.status = "present";
       attendance.session = "full_day";
-    } else if (attendance.workingMinutes >= halfDayMinutes) {
+    } else if (attendance.workingMinutes >= HALF_DAY_MINUTES) {
       attendance.status = "half_day";
       attendance.session = "half_day";
     } else {
       attendance.status = "absent";
       attendance.session = "absent";
     }
+
+    /* =========================================
+       Debug Logs
+    ========================================= */
+
+    console.log("========================================");
+    console.log("Attendance Calculation");
+    console.log("----------------------------------------");
+    console.log("Punch In          :", attendance.punchIn);
+    console.log("Punch Out         :", attendance.punchOut);
+    console.log("Total Minutes     :", totalMinutes);
+    console.log("Break Minutes     :", attendance.totalBreakMinutes);
+    console.log("Extra Break       :", attendance.extraBreakMinutes);
+    console.log("Working Minutes   :", attendance.workingMinutes);
+    console.log("Overtime Minutes  :", attendance.overtimeMinutes);
+    console.log("Status            :", attendance.status);
+    console.log("Session           :", attendance.session);
+    console.log("========================================");
+  } else {
+    console.log("Punch In or Punch Out missing.");
   }
 
   return attendance;
 };
 
-exports.calculateLateMinutes = (attendanceDate, punchIn, shiftName = "Day Shift") => {
-  if (!punchIn) return 0;
+/* ==========================================================
+   Calculate Late Minutes
+========================================================== */
 
-  const shiftStart = shiftName?.toLowerCase().includes("night")
-    ? "19:00"
-    : "09:30";
+exports.calculateLateMinutes = (
+  attendanceDate,
+  punchIn,
+  shiftName = "General Shift"
+) => {
+  if (!attendanceDate || !punchIn) return 0;
 
-  const officeStart = new Date(`${attendanceDate}T${shiftStart}:00+05:30`);
+  let shiftStartTime = "09:30";
 
-  const lateMinutes = exports.minutesDiff(officeStart, punchIn);
+  if (
+    shiftName &&
+    shiftName.toLowerCase().includes("night")
+  ) {
+    shiftStartTime = "19:00";
+  }
+
+  const officeStart = new Date(
+    `${attendanceDate}T${shiftStartTime}:00+05:30`
+  );
+
+  const lateMinutes = exports.minutesDiff(
+    officeStart,
+    punchIn
+  );
 
   return lateMinutes > 0 ? lateMinutes : 0;
 };
+
+/* ==========================================================
+   Calculate Early Leaving
+========================================================== */
+
+exports.calculateEarlyLeavingMinutes = (
+  attendanceDate,
+  punchOut,
+  shiftName = "General Shift"
+) => {
+  if (!attendanceDate || !punchOut) return 0;
+
+  let shiftEndTime = "18:30";
+
+  if (
+    shiftName &&
+    shiftName.toLowerCase().includes("night")
+  ) {
+    shiftEndTime = "04:00";
+  }
+
+  const officeEnd = new Date(
+    `${attendanceDate}T${shiftEndTime}:00+05:30`
+  );
+
+  const earlyMinutes = exports.minutesDiff(
+    punchOut,
+    officeEnd
+  );
+
+  return earlyMinutes > 0 ? earlyMinutes : 0;
+};
+
+/* ==========================================================
+   Constants
+========================================================== */
+
+exports.DEFAULT_BREAK_MINUTES = DEFAULT_BREAK_MINUTES;
+exports.FULL_DAY_MINUTES = FULL_DAY_MINUTES;
+exports.HALF_DAY_MINUTES = HALF_DAY_MINUTES;
