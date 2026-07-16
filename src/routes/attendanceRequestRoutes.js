@@ -24,15 +24,23 @@ router.get(
 router.get(
   "/",
   verifyToken,
-  allowRoles("hr", "admin", "employer"),
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager"),
   c.getAttendanceRequests
 );
 
 router.patch(
   "/:id/status",
   verifyToken,
-  allowRoles("hr", "admin", "employer"),
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager", "employee"),
   c.updateAttendanceRequestStatus
+);
+
+//get attendance data use by attendance date
+router.get(
+  "/attendance-data/:date",
+  verifyToken,
+  allowRoles("hr", "employer", "teamlead", "projectmanager", "employee"),
+  c.getAttendanceDataByDate
 );
 
 module.exports = router;

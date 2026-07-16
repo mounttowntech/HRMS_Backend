@@ -1,6 +1,7 @@
 const DEFAULT_BREAK_MINUTES = 60;
 const FULL_DAY_MINUTES = 480; // 8 hours
 const HALF_DAY_MINUTES = 240; // 4 hours
+const FULL_DAY_GRACE = 5; // 5 minutes
 
 exports.minutesDiff = (start, end) => {
   return Math.floor((new Date(end) - new Date(start)) / 60000);
@@ -8,6 +9,16 @@ exports.minutesDiff = (start, end) => {
 
 exports.calculateAttendance = (attendance) => {
   let actualBreakMinutes = 0;
+  let requiredMinutes = FULL_DAY_MINUTES;
+
+  const day = new Date(attendance.attendanceDate)
+  .toLocaleDateString("en-US", { weekday: "long" });
+
+  if (day === "Saturday") {
+    requiredMinutes = 390; // 6 hours 30 minutes
+  }
+
+  const halfDayMinutes = requiredMinutes / 2;
 
   if (attendance.breaks?.length) {
     actualBreakMinutes = attendance.breaks.reduce((sum, item) => {
@@ -43,14 +54,24 @@ exports.calculateAttendance = (attendance) => {
     );
 
     attendance.overtimeMinutes =
-      attendance.workingMinutes > FULL_DAY_MINUTES
-        ? attendance.workingMinutes - FULL_DAY_MINUTES
+      attendance.workingMinutes > requiredMinutes
+        ? attendance.workingMinutes - requiredMinutes
         : 0;
 
-    if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
+    // if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
+    //   attendance.status = "present";
+    //   attendance.session = "full_day";
+    // } else if (attendance.workingMinutes <= HALF_DAY_MINUTES) {
+    //   attendance.status = "half_day";
+    //   attendance.session = "half_day";
+    // } else {
+    //   attendance.status = "absent";
+    //   attendance.session = "absent";
+    // }
+    if (attendance.workingMinutes >= (requiredMinutes - FULL_DAY_GRACE)) {
       attendance.status = "present";
       attendance.session = "full_day";
-    } else if (attendance.workingMinutes >= HALF_DAY_MINUTES) {
+    } else if (attendance.workingMinutes >= halfDayMinutes) {
       attendance.status = "half_day";
       attendance.session = "half_day";
     } else {

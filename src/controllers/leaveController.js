@@ -84,10 +84,7 @@ exports.applyLeave = async (req, res) => {
         fileUrl: `/uploads/leaves/${file.filename}`,
         mimeType: file.mimetype,
       })) || [];
-console.log("balance leave is :", {
-  balance,
-  days,
-});
+
     if (balance < days) {
       const leave = await Leave.create({
         companyId: req.user.companyId,
