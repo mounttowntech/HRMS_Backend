@@ -8,6 +8,7 @@ const sendEmail = require("../utils/sendMail");
 const leaveApprovalTemplate = require("../templates/leaveApprovalTemplate");
 const Notification = require("../models/notificationModel");
 const User = require("../models/User");
+const Project = require("../models/Project");
 
 const {
   sendNotificationToRoles,
@@ -424,13 +425,19 @@ exports.getLeaves = async (req, res) => {
         });
       }
 
-      const teamEmployees = await Employee.find({
+      // const teamEmployees = await Employee.find({
+      //   companyId: req.user.companyId,
+      //   projectManager: teamLead._id,
+      // }).select("_id");
+
+      //find team members from projects collection where teamlead is loggedInUserId
+      const teamProjects = await Project.find({
         companyId: req.user.companyId,
-        projectManager: teamLead._id,
-      }).select("_id");
+        teamlead: teamLead._id,
+      }).select("_id teamMembers");
 
       filter.employeeId = {
-        $in: teamEmployees.map((emp) => emp._id),
+        $in: teamProjects.flatMap((project) => project.teamMembers),
       };
     }
 
@@ -447,14 +454,20 @@ exports.getLeaves = async (req, res) => {
         });
       }
 
-      const teamEmployees = await Employee.find({
+      const teamProjects = await Project.find({
         companyId: req.user.companyId,
-        projectManager: manager._id,
-      }).select("_id");
+        projectmanager: manager._id,
+      }).select("_id teamMembers");
 
       filter.employeeId = {
-        $in: teamEmployees.map((emp) => emp._id),
+        $in: teamProjects.flatMap((project) => project.teamMembers),
+        $ne: manager._id, // Exclude the manager's own leaves
       };
+    }
+
+    //exclude login user leaves if role is hr,projectmanager and teamlead
+    if (role === "hr") {
+      filter.employeeId = { $ne: req.user.employeeId };
     }
 
     const leaves = await Leave.find(filter)
@@ -573,9 +586,10 @@ exports.updateLeave = async (req, res) => {
         const teamEmployee = await Employee.findOne({
           _id: leave.employeeId,
           companyId: req.user.companyId,
-          $or: [
-            { projectManager: loggedEmployee._id },
-          ],
+          // $or: [
+          //   { projectManager: loggedEmployee._id },
+          //   { userId: loggedEmployee?.userId}
+          // ],
         });
 
         if (!teamEmployee) {
@@ -673,6 +687,7 @@ exports.updateLeave = async (req, res) => {
         companyId: req.user.companyId,
         $or: [
           { projectManager: loggedEmployee._id },
+          { userId: loggedEmployee?.userId}
         ],
       });
 
@@ -781,9 +796,10 @@ exports.deleteLeave = async (req, res) => {
       const teamEmployee = await Employee.findOne({
         _id: leave.employeeId,
         companyId: req.user.companyId,
-        $or: [
-          { projectManager: loggedEmployee._id },
-        ],
+        // $or: [
+        //   { projectManager: loggedEmployee._id, role: "projectmanager" },
+        //   { userId: loggedEmployee?.userId ,role: "teamlead"}
+        // ],
       });
 
       if (!teamEmployee) {

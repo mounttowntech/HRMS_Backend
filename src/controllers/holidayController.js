@@ -1,8 +1,11 @@
 const Holiday = require("../models/holiday");
+const {sendNotificationToRoles } = require("../utils/notificationHelper");
+const getUserId = (req) => req.user?.userId || req.user?.id;
 
 exports.createHoliday = async (req, res) => {
   try {
     const { name, date, type, description } = req.body;
+     const userId = getUserId(req);
 
     const holiday = await Holiday.create({
       companyId: req.user.companyId,
@@ -11,6 +14,18 @@ exports.createHoliday = async (req, res) => {
       type,
       description,
     });
+
+    const notifyRoles = ["admin","teamlead", "projectmanager", "hr", "employee"];
+    await sendNotificationToRoles({
+          companyId: req.user.companyId,
+          senderId: userId,
+          roles: notifyRoles,
+          title: `New Holiday: ${name}`,
+          message: description,
+          type: "general",
+          referenceId: holiday._id,
+          referenceModel: "Holiday",
+        });
 
     res.status(201).json({
       success: true,
@@ -31,7 +46,7 @@ exports.getHolidays = async (req, res) => {
     const holidays = await Holiday.find({
       companyId: req.user.companyId,
       status: "active",
-    }).sort({ date: 1 });
+    }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -53,7 +68,7 @@ exports.getUpcomingHolidays = async (req, res) => {
       status: "active",
       date: { $gte: new Date() },
     })
-      .sort({ date: 1 })
+      .sort({ createdAt: -1 })
       .limit(5);
 
     res.status(200).json({

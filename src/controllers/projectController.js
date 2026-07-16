@@ -1,5 +1,6 @@
 const Project = require("../models/Project");
 const Company = require("../models/Company");
+const Employee = require("../models/Employee");
 
 // Common populate
 const populateProject = (query) => {
@@ -68,10 +69,23 @@ exports.createProject = async (req, res) => {
 // GET ALL PROJECTS
 exports.getProjects = async (req, res) => {
   try {
+    const filter = { companyId: req.user.companyId };
+    const userId = req.user.employeeId || req.user.id;
+    // find user in employee collection to get role
+    const employee = await Employee.findOne({ _id: userId, companyId: req.user.companyId }).select("role");
+    if (employee) {
+      if (employee.role === "teamlead") {
+        filter.teamlead = userId;
+      }else if (employee.role === "projectmanager") {
+        filter.projectmanager = userId;
+      }else if (employee.role === "employee") {
+        filter.teamMembers = userId;
+      }
+    }
+
+    // console.log("Filter for fetching projects:", filter);
     const projects = await populateProject(
-      Project.find({
-        companyId: req.user.companyId,
-      }).sort({ createdAt: -1 })
+      Project.find(filter).sort({ createdAt: -1 })
     );
 
     res.json({

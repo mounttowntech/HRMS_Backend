@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
 const PermissionRequest = require("../models/permissionRequest");
+const calculateLateMinutesByShift = require("../utils/shiftAttendanceDate").calculateLateMinutesByShift;
 
 const {
   getISTDateString,
@@ -227,6 +228,11 @@ const calculateBreakDetails = (attendance) => {
     actualBreakMinutes,
     extraBreakMinutes:
       actualBreakMinutes > 60 ? actualBreakMinutes - 60 : 0,
+      breaks: attendance?.breaks?.map((item) => ({
+        breakIn: item.breakIn,
+        breakOut: item.breakOut,
+        minutes: item.minutes,
+      })),
   };
 };
 
@@ -958,17 +964,321 @@ exports.endBreak = async (req, res) => {
   }
 };
 
+const getDateList = (fromDate, toDate) => {
+  const dates = [];
+
+  let current = new Date(fromDate + "T00:00:00");
+  const end = new Date(toDate + "T00:00:00");
+
+  while (current <= end) {
+    const year = current.getFullYear();
+    const month = String(current.getMonth() + 1).padStart(2, "0");
+    const day = String(current.getDate()).padStart(2, "0");
+
+    dates.push(`${year}-${month}-${day}`);
+
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+};
+
+// exports.getAttendance = async (req, res) => {
+//   try {
+//     const companyId = req.user.companyId;
+//     const { date, employeeId, fromDate, toDate , shiftName} = req.query;
+
+//     const selectedDate = date || getISTDateString();
+//     const fromAllDate = fromDate || getISTDateString();
+//     const toAllDate = toDate || getISTDateString();
+//     const todayDate = getISTDateString();
+// console.log('quert:',req.query)
+//     const isValidDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate);
+//     const isValidFromDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(fromAllDate);
+//     const isValidToDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(toAllDate);
+
+//     if (!isValidDateFormat) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid date format. Use YYYY-MM-DD",
+//         attendance: [],
+//       });
+//     }
+
+//     if (!isValidFromDateFormat) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid from date format. Use YYYY-MM-DD",
+//         attendance: [],
+//       });
+//     }
+
+//     if (!isValidToDateFormat) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid to date format. Use YYYY-MM-DD",
+//         attendance: [],
+//       });
+//     }
+
+//     if (selectedDate > todayDate) {
+//       return res.status(200).json({
+//         success: true,
+//         date: selectedDate,
+//         count: 0,
+//         summary: {
+//           totalEmployees: 0,
+//           working: 0,
+//           present: 0,
+//           halfDay: 0,
+//           leave: 0,
+//           absent: 0,
+//           late: 0,
+//           permission: 0,
+//           extraBreakTaken: 0,
+//         },
+//         attendance: [],
+//       });
+//     }
+
+//     const { start, end } = getDateRange(selectedDate);
+//     const { start: fromStart, end: fromEnd } = getDateRange(fromAllDate);
+//     const { start: toStart, end: toEnd } = getDateRange(toAllDate);
+
+//     const employeeFilter = {
+//       companyId,
+//       status: "active",
+//     };
+
+//     if (employeeId) {
+//       employeeFilter._id = employeeId;
+//     }
+
+//     const employees = await Employee.find(employeeFilter)
+//       .select(
+//         "fullName employeeCode email salary role departmentId designationId shiftId"
+//       )
+//       .populate("departmentId", "name departmentName")
+//       .populate("designationId", "name designationName")
+//       .populate("shiftId", "shiftName name")
+//       .lean();
+
+//     if (!employees.length) {
+//       return res.status(200).json({
+//         success: true,
+//         date: selectedDate,
+//         count: 0,
+//         summary: {
+//           totalEmployees: 0,
+//           working: 0,
+//           present: 0,
+//           halfDay: 0,
+//           leave: 0,
+//           absent: 0,
+//           late: 0,
+//           permission: 0,
+//           extraBreakTaken: 0,
+//         },
+//         attendance: [],
+//       });
+//     }
+// console.log("DATE RANGE:", { start, end, shiftName });
+//     // const attendanceRecords = await Attendance.find({
+//     //   companyId,
+//     //   date: {
+//     //     $gte: start,
+//     //     $lte: end,
+//     //   },
+//     //   ...(shiftName ? { shiftName } : {}),
+//     // }).lean();
+
+//     const filter = {
+//   companyId
+// };
+
+// if (fromDate && toDate) {
+//   filter.attendanceDate = {
+//     $gte: fromDate,
+//     $lte: toDate,
+//   };
+// }
+
+// if (shiftName) {
+//   filter.shiftName = shiftName;
+// }
+
+// const attendanceRecords = await Attendance.find(filter).lean();
+
+//     console.log("ATTENDANCE RECORDS:", attendanceRecords);
+
+//     const leaveRecords = await Leave.find({
+//       companyId,
+//       status: "approved",
+//       fromDate: {
+//         $lte: end,
+//       },
+//       toDate: {
+//         $gte: start,
+//       },
+//     }).lean();
+
+//     const permissionRecords = await PermissionRequest.find({
+//       companyId,
+//       status: "approved",
+//       permissionDate: {
+//         $gte: start,
+//         $lte: end,
+//       },
+//     }).lean();
+
+//     const attendanceMap = {};
+//     attendanceRecords.forEach((item) => {
+//       attendanceMap[item.employeeId.toString()] = item;
+//     });
+
+//     const leaveMap = {};
+//     leaveRecords.forEach((item) => {
+//       leaveMap[item.employeeId.toString()] = item;
+//     });
+
+//     const permissionMap = {};
+//     permissionRecords.forEach((item) => {
+//       permissionMap[item.employeeId.toString()] = item;
+//     });
+
+//     const attendance = employees.map((emp) => {
+//       const empId = emp._id.toString();
+// console.log("attendanceMap ID:", attendanceMap);
+//       const attendanceData = attendanceMap[empId];
+//       const leave = leaveMap[empId];
+//       const permission = permissionMap[empId];
+
+//       let status = "absent";
+
+//       if (leave) {
+//         status = "leave";
+//       } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
+//         status = "working";
+//       } else if (attendanceData?.status) {
+//         status = attendanceData.status;
+//       }
+
+//       const breakDetails = calculateBreakDetails(attendanceData);
+
+//       const lateMinutes = attendanceData?.punchIn
+//         ? calculateLateMinutes(selectedDate, attendanceData.punchIn)
+//         : 0;
+
+//       return {
+//         employeeId: emp._id,
+//         employeeCode: emp.employeeCode,
+//         employeeName: emp.fullName,
+//         email: emp.email,
+//         role: emp.role,
+
+//         department:
+//           emp.departmentId?.departmentName ||
+//           emp.departmentId?.name ||
+//           "",
+
+//         designation:
+//           emp.designationId?.designationName ||
+//           emp.designationId?.name ||
+//           "",
+
+//         shiftName:
+//           attendanceData?.shiftName ||
+//           emp.shiftId?.shiftName ||
+//           emp.shiftId?.name ||
+//           "Day Shift",
+
+//         date: selectedDate,
+//         status,
+
+//         punchInDateTime: attendanceData?.punchIn || null,
+//         punchOutDateTime: attendanceData?.punchOut || null,
+
+//         checkInTime: formatTime(attendanceData?.punchIn),
+//         checkOutTime: formatTime(attendanceData?.punchOut),
+
+//         workingMinutes: attendanceData?.workingMinutes || 0,
+//         totalBreakMinutes: attendanceData?.totalBreakMinutes || 0,
+
+//         break: breakDetails,
+
+//         late: {
+//           isLate: lateMinutes > 0,
+//           lateMinutes,
+//         },
+
+//         permission: permission
+//           ? {
+//               permissionId: permission._id,
+//               fromTime: permission.fromTime,
+//               toTime: permission.toTime,
+//               minutes: permission.minutes,
+//               reason: permission.reason,
+//             }
+//           : null,
+
+//         leave: leave
+//           ? {
+//               leaveId: leave._id,
+//               leaveType: leave.leaveType,
+//               fromDate: leave.fromDate,
+//               toDate: leave.toDate,
+//               reason: leave.reason,
+//             }
+//           : null,
+//       };
+//     });
+
+//     const summary = {
+//       totalEmployees: attendance.length,
+//       working: attendance.filter((x) => x.status === "working").length,
+//       present: attendance.filter((x) => x.status === "present").length,
+//       halfDay: attendance.filter((x) => x.status === "half_day").length,
+//       leave: attendance.filter((x) => x.status === "leave").length,
+//       absent: attendance.filter((x) => x.status === "absent").length,
+//       late: attendance.filter((x) => x.late.isLate).length,
+//       permission: attendance.filter((x) => x.permission).length,
+//       extraBreakTaken: attendance.filter(
+//         (x) => x.break.extraBreakMinutes > 0
+//       ).length,
+//     };
+
+//     res.status(200).json({
+//       success: true,
+//       date: selectedDate,
+//       count: 0,
+//       summary,
+//       attendance,
+//     });
+//   } catch (error) {
+//     console.log("GET ATTENDANCE ERROR:", error);
+
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//       attendance: [],
+//     });
+//   }
+// };
+
 exports.getAttendance = async (req, res) => {
   try {
     const companyId = req.user.companyId;
-    const { date, employeeId } = req.query;
+    const { date, employeeId, fromDate, toDate, shiftName } = req.query;
 
-    const selectedDate = date || getISTDateString();
     const todayDate = getISTDateString();
 
-    const isValidDateFormat = /^\d{4}-\d{2}-\d{2}$/.test(selectedDate);
+    const isReportFilter = Boolean(fromDate || toDate || shiftName);
 
-    if (!isValidDateFormat) {
+    const selectedDate = date || todayDate;
+
+    const isValidDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+    if (date && !isValidDate(date)) {
       return res.status(400).json({
         success: false,
         message: "Invalid date format. Use YYYY-MM-DD",
@@ -976,7 +1286,31 @@ exports.getAttendance = async (req, res) => {
       });
     }
 
-    if (selectedDate > todayDate) {
+    if (fromDate && !isValidDate(fromDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid fromDate format. Use YYYY-MM-DD",
+        attendance: [],
+      });
+    }
+
+    if (toDate && !isValidDate(toDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid toDate format. Use YYYY-MM-DD",
+        attendance: [],
+      });
+    }
+
+    if ((fromDate && !toDate) || (!fromDate && toDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Both fromDate and toDate are required",
+        attendance: [],
+      });
+    }
+
+    if (!isReportFilter && selectedDate > todayDate) {
       return res.status(200).json({
         success: true,
         date: selectedDate,
@@ -996,8 +1330,6 @@ exports.getAttendance = async (req, res) => {
       });
     }
 
-    const { start, end } = getDateRange(selectedDate);
-
     const employeeFilter = {
       companyId,
       status: "active",
@@ -1013,7 +1345,7 @@ exports.getAttendance = async (req, res) => {
       )
       .populate("departmentId", "name departmentName")
       .populate("designationId", "name designationName")
-      .populate("shiftId", "shiftName name")
+      .populate("shiftId", "shiftName name startTime graceMinutes")
       .lean();
 
     if (!employees.length) {
@@ -1036,37 +1368,72 @@ exports.getAttendance = async (req, res) => {
       });
     }
 
-    const attendanceRecords = await Attendance.find({
+    let attendanceFilter = {
       companyId,
-      date: {
-        $gte: start,
-        $lte: end,
-      },
-    }).lean();
+    };
 
-    const leaveRecords = await Leave.find({
+    let leaveFilter = {
       companyId,
       status: "approved",
-      fromDate: {
-        $lte: end,
-      },
-      toDate: {
-        $gte: start,
-      },
-    }).lean();
+    };
 
-    const permissionRecords = await PermissionRequest.find({
+    let permissionFilter = {
       companyId,
       status: "approved",
-      permissionDate: {
+    };
+
+    if (isReportFilter) {
+      const reportFromDate = fromDate || todayDate;
+      const reportToDate = toDate || todayDate;
+
+      attendanceFilter.attendanceDate = {
+        $gte: reportFromDate,
+        $lte: reportToDate,
+      };
+
+      leaveFilter.fromDate = {
+        $lte: new Date(`${reportToDate}T23:59:59.999+05:30`),
+      };
+      leaveFilter.toDate = {
+        $gte: new Date(`${reportFromDate}T00:00:00.000+05:30`),
+      };
+
+      permissionFilter.permissionDate = {
+        $gte: new Date(`${reportFromDate}T00:00:00.000+05:30`),
+        $lte: new Date(`${reportToDate}T23:59:59.999+05:30`),
+      };
+
+      if (shiftName) {
+        attendanceFilter.shiftName = shiftName;
+      }
+    } else {
+      attendanceFilter.attendanceDate = selectedDate;
+
+      const { start, end } = getDateRange(selectedDate);
+
+      leaveFilter.fromDate = { $lte: end };
+      leaveFilter.toDate = { $gte: start };
+
+      permissionFilter.permissionDate = {
         $gte: start,
         $lte: end,
-      },
-    }).lean();
+      };
+    }
+
+    if (employeeId) {
+      attendanceFilter.employeeId = employeeId;
+      leaveFilter.employeeId = employeeId;
+      permissionFilter.employeeId = employeeId;
+    }
+
+    const attendanceRecords = await Attendance.find(attendanceFilter).lean();
+    const leaveRecords = await Leave.find(leaveFilter).lean();
+    const permissionRecords = await PermissionRequest.find(permissionFilter).lean();
 
     const attendanceMap = {};
     attendanceRecords.forEach((item) => {
-      attendanceMap[item.employeeId.toString()] = item;
+      const key = `${item.employeeId}_${item.attendanceDate}`;
+      attendanceMap[key] = item;
     });
 
     const leaveMap = {};
@@ -1079,91 +1446,110 @@ exports.getAttendance = async (req, res) => {
       permissionMap[item.employeeId.toString()] = item;
     });
 
-    const attendance = employees.map((emp) => {
-      const empId = emp._id.toString();
+    // const dateList = [];
 
-      const attendanceData = attendanceMap[empId];
-      const leave = leaveMap[empId];
-      const permission = permissionMap[empId];
+    const dateList = isReportFilter
+  ? getDateList(fromDate || todayDate, toDate || todayDate)
+  : [selectedDate];
 
-      let status = "absent";
+    const attendance = [];
 
-      if (leave) {
-        status = "leave";
-      } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
-        status = "working";
-      } else if (attendanceData?.status) {
-        status = attendanceData.status;
-      }
+    employees.forEach((emp) => {
+      dateList.forEach((currentDate) => {
+        const empId = emp._id.toString();
+        const key = `${empId}_${currentDate}`;
 
-      const breakDetails = calculateBreakDetails(attendanceData);
+        const attendanceData = attendanceMap[key];
+        const leave = leaveMap[empId];
+        const permission = permissionMap[empId];
 
-      const lateMinutes = attendanceData?.punchIn
-        ? calculateLateMinutes(selectedDate, attendanceData.punchIn)
-        : 0;
-
-      return {
-        employeeId: emp._id,
-        employeeCode: emp.employeeCode,
-        employeeName: emp.fullName,
-        email: emp.email,
-        role: emp.role,
-
-        department:
-          emp.departmentId?.departmentName ||
-          emp.departmentId?.name ||
-          "",
-
-        designation:
-          emp.designationId?.designationName ||
-          emp.designationId?.name ||
-          "",
-
-        shiftName:
+        const employeeShiftName =
           attendanceData?.shiftName ||
           emp.shiftId?.shiftName ||
           emp.shiftId?.name ||
-          "Day Shift",
+          "Day Shift";
 
-        date: selectedDate,
-        status,
+        if (shiftName && employeeShiftName !== shiftName) {
+          return;
+        }
 
-        punchInDateTime: attendanceData?.punchIn || null,
-        punchOutDateTime: attendanceData?.punchOut || null,
+        let status = "absent";
 
-        checkInTime: formatTime(attendanceData?.punchIn),
-        checkOutTime: formatTime(attendanceData?.punchOut),
+        if (leave) {
+          status = "leave";
+        } else if (attendanceData?.punchIn && !attendanceData?.punchOut) {
+          status = "working";
+        } else if (attendanceData?.status) {
+          status = attendanceData.status;
+        }
 
-        workingMinutes: attendanceData?.workingMinutes || 0,
-        totalBreakMinutes: attendanceData?.totalBreakMinutes || 0,
+        const breakDetails = calculateBreakDetails(attendanceData);
 
-        break: breakDetails,
+        const shiftStartTime = emp.shiftId?.startTime || "09:30";
+        const graceMinutes = emp.shiftId?.graceMinutes || 0;
 
-        late: {
-          isLate: lateMinutes > 0,
-          lateMinutes,
-        },
+        const lateMinutes = attendanceData?.punchIn
+          ? calculateLateMinutesByShift(currentDate, attendanceData.punchIn, shiftStartTime, graceMinutes)
+          : 0;
 
-        permission: permission
-          ? {
-              permissionId: permission._id,
-              fromTime: permission.fromTime,
-              toTime: permission.toTime,
-              minutes: permission.minutes,
-              reason: permission.reason,
-            }
-          : null,
+        attendance.push({
+          employeeId: emp._id,
+          employeeCode: emp.employeeCode,
+          employeeName: emp.fullName,
+          email: emp.email,
+          role: emp.role,
 
-        leave: leave
-          ? {
-              leaveId: leave._id,
-              leaveType: leave.leaveType,
-              fromDate: leave.fromDate,
-              toDate: leave.toDate,
-              reason: leave.reason,
-            }
-          : null,
-      };
+          department:
+            emp.departmentId?.departmentName || emp.departmentId?.name || "",
+
+          designation:
+            emp.designationId?.designationName ||
+            emp.designationId?.name ||
+            "",
+
+          shiftName: employeeShiftName,
+
+          date: currentDate,
+          attendanceDate: currentDate,
+          status,
+
+          punchInDateTime: attendanceData?.punchIn || null,
+          punchOutDateTime: attendanceData?.punchOut || null,
+
+          checkInTime: formatTime(attendanceData?.punchIn),
+          checkOutTime: formatTime(attendanceData?.punchOut),
+
+          workingMinutes: attendanceData?.workingMinutes || 0,
+          totalBreakMinutes: attendanceData?.totalBreakMinutes || 0,
+
+          break: breakDetails,
+
+          late: {
+            isLate: lateMinutes > 0,
+            lateMinutes,
+          },
+
+          permission: permission
+            ? {
+                permissionId: permission._id,
+                fromTime: permission.fromTime,
+                toTime: permission.toTime,
+                minutes: permission.minutes,
+                reason: permission.reason,
+              }
+            : null,
+
+          leave: leave
+            ? {
+                leaveId: leave._id,
+                leaveType: leave.leaveType,
+                fromDate: leave.fromDate,
+                toDate: leave.toDate,
+                reason: leave.reason,
+              }
+            : null,
+        });
+      });
     });
 
     const summary = {
@@ -1175,22 +1561,24 @@ exports.getAttendance = async (req, res) => {
       absent: attendance.filter((x) => x.status === "absent").length,
       late: attendance.filter((x) => x.late.isLate).length,
       permission: attendance.filter((x) => x.permission).length,
-      extraBreakTaken: attendance.filter(
-        (x) => x.break.extraBreakMinutes > 0
-      ).length,
+      extraBreakTaken: attendance.filter((x) => x.break.extraBreakMinutes > 0)
+        .length,
     };
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       date: selectedDate,
-      count: 0,
+      fromDate: fromDate || null,
+      toDate: toDate || null,
+      shiftName: shiftName || null,
+      count: attendance.length,
       summary,
       attendance,
     });
   } catch (error) {
     console.log("GET ATTENDANCE ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: error.message,
       attendance: [],
@@ -2035,6 +2423,7 @@ exports.getAttendanceCalendarView = async (req, res) => {
               totalBreakMinutes: attendance.totalBreakMinutes,
 
               status: attendance.status,
+              breaks: attendance.breaks || [],
 
             }
 

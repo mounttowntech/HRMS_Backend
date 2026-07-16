@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Permission = require("../models/permissionModel");
 const Employee = require("../models/Employee");
+const Project = require("../models/Project");
 
 const {
   MONTHLY_LIMIT,
@@ -212,9 +213,99 @@ exports.rejectPermission = async (req, res) => {
   }
 };
 
+// exports.getAllPermissions = async (req, res) => {
+//   try {
+//     const companyId = req.user.companyId;
+//     const userId = req.user.id || req.user.userId;
+
+//     console.log("Fetching permissions for companyId:", companyId, "userId:", userId);
+
+//     const {
+//       employee,
+//       approvalStatus,
+//       status,
+//       month,
+//       year,
+//       page = 1,
+//       limit = 10,
+//     } = req.query;
+
+//     const query = { companyId };
+
+// console.log("employee_querty:", employee);
+
+//     //find employee by userId
+//     const employeeData = await Employee.findOne({
+//       userId,
+//       companyId,
+//     }).select("_id fullName employeeCode role departmentId designationId shiftId");
+
+//     console.log("Employee data found:", employeeData);
+//  if(employeeData?.role == "projectmanager") {
+//       //find employees in the same department as the project manager
+//       const employeesInDepartment = await Project.find({
+//         projectmanager: employeeData?._id,
+//         companyId,
+//       }).select("_id teamMembers");
+//       console.log("Employees in project manager's projects:", employeesInDepartment);
+//       //find permissions for project manager's team members
+//      const teamMemberIds = [ ...new Set(
+//     employeesInDepartment.flatMap((project) =>
+//       project.teamMembers.map((id) => id.toString())
+//     )
+//   ),
+// ];
+//       console.log("Team member IDs:", teamMemberIds);
+//       query.employee = { $in: teamMemberIds };
+//     } else if(employeeData?.role == "teamlead") {
+//       const teamLeadDepartment = employeeData?.departmentId;
+//       //find employees in the same department as the team lead
+//       const employeesInDepartment = await Employee.find({
+//         departmentId: teamLeadDepartment,
+//         companyId,
+//       }).select("_id");
+//       const employeeIds = employeesInDepartment.map((emp) => emp._id);
+//       query.employee = { $in: employeeIds };
+//     }
+// console.log("Query after role-based filtering:", query);
+//     if (employee) query.employee = employee;
+//     if (approvalStatus) query.approvalStatus = approvalStatus;
+//     if (status) query.status = status;
+//     if (month) query.month = Number(month);
+//     if (year) query.year = Number(year);
+
+//     const skip = (Number(page) - 1) * Number(limit);
+
+//     const [permissions, totalRecords] = await Promise.all([
+//       Permission.find(query)
+//         .populate("employee", "employeeCode fullName email")
+//         .populate("approvedBy", "name email role")
+//         .sort({ createdAt: -1 })
+//         .skip(skip)
+//         .limit(Number(limit)),
+
+//       Permission.countDocuments(query),
+//     ]);
+
+//     return res.status(200).json({
+//       success: true,
+//       totalRecords,
+//       totalPages: Math.ceil(totalRecords / Number(limit)),
+//       currentPage: Number(page),
+//       data: permissions,
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.getAllPermissions = async (req, res) => {
   try {
     const companyId = req.user.companyId;
+    const userId = req.user.id || req.user.userId;
 
     const {
       employee,
@@ -228,7 +319,64 @@ exports.getAllPermissions = async (req, res) => {
 
     const query = { companyId };
 
-    if (employee) query.employee = employee;
+    const employeeData = await Employee.findOne({
+      userId,
+      companyId,
+    }).select("_id fullName employeeCode role departmentId");
+
+    // if (!employeeData) {
+    //   return res.status(404).json({
+    //     success: false,
+    //     message: "Employee not found",
+    //   });
+    // }
+
+    let allowedEmployeeIds = null;
+
+    if (employeeData?.role === "projectmanager") {
+      const projects = await Project.find({
+        projectmanager: employeeData._id,
+        companyId,
+      }).select("teamMembers");
+
+      allowedEmployeeIds = [
+        ...new Set(
+          projects.flatMap((project) =>
+            project.teamMembers.map((id) => id.toString())
+          )
+        ),
+      ];
+
+      query.employee = { $in: allowedEmployeeIds };
+    }
+
+    if (employeeData?.role === "teamlead") {
+      const employeesInDepartment = await Employee.find({
+        departmentId: employeeData.departmentId,
+        companyId,
+      }).select("_id");
+
+      allowedEmployeeIds = employeesInDepartment.map((emp) =>
+        emp._id.toString()
+      );
+
+      query.employee = { $in: allowedEmployeeIds };
+    }
+
+    if (employee) {
+      if (
+        allowedEmployeeIds &&
+        !allowedEmployeeIds.includes(employee.toString())
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied for this employee permission",
+        });
+      }
+
+      query.employee = employee;
+    }
+
     if (approvalStatus) query.approvalStatus = approvalStatus;
     if (status) query.status = status;
     if (month) query.month = Number(month);
