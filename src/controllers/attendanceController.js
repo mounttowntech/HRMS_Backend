@@ -374,102 +374,102 @@ exports.employeePunchIn = async (req, res) => {
 //   }
 // };
 
-exports.employeePunchOut = async (req, res) => {
-  try {
-    const userId = req.user?.userId || req.user?.id;
+// exports.employeePunchOut = async (req, res) => {
+//   try {
+//     const userId = req.user?.userId || req.user?.id;
 
-    const employee = await Employee.findOne({
-      userId,
-      companyId: req.user.companyId,
-    }).populate("shiftId", "shiftName name");
+//     const employee = await Employee.findOne({
+//       userId,
+//       companyId: req.user.companyId,
+//     }).populate("shiftId", "shiftName name");
 
-    if (!employee) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found",
-      });
-    }
+//     if (!employee) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Employee not found",
+//       });
+//     }
 
-    const shiftName =
-      employee.shiftId?.shiftName ||
-      employee.shiftId?.name ||
-      employee.shiftType ||
-      "Day Shift";
+//     const shiftName =
+//       employee.shiftId?.shiftName ||
+//       employee.shiftId?.name ||
+//       employee.shiftType ||
+//       "Day Shift";
 
-    // FIRST: find active open attendance
-    // This works for day shift and night shift
-    let attendance = await Attendance.findOne({
-      companyId: req.user.companyId,
-      employeeId: employee._id,
-      punchIn: { $ne: null },
-      punchOut: null,
-    }).sort({ punchIn: -1 });
+//     // FIRST: find active open attendance
+//     // This works for day shift and night shift
+//     let attendance = await Attendance.findOne({
+//       companyId: req.user.companyId,
+//       employeeId: employee._id,
+//       punchIn: { $ne: null },
+//       punchOut: null,
+//     }).sort({ punchIn: -1 });
 
-    // SECOND: fallback by shift attendanceDate
-    if (!attendance) {
-      const attendanceDate = getAttendanceDateByShift(shiftName);
+//     // SECOND: fallback by shift attendanceDate
+//     if (!attendance) {
+//       const attendanceDate = getAttendanceDateByShift(shiftName);
 
-      attendance = await Attendance.findOne({
-        companyId: req.user.companyId,
-        employeeId: employee._id,
-        attendanceDate,
-      });
-    }
+//       attendance = await Attendance.findOne({
+//         companyId: req.user.companyId,
+//         employeeId: employee._id,
+//         attendanceDate,
+//       });
+//     }
 
-    if (!attendance || !attendance.punchIn) {
-      return res.status(400).json({
-        success: false,
-        message: "Punch in first",
-      });
-    }
+//     if (!attendance || !attendance.punchIn) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Punch in first",
+//       });
+//     }
 
-    if (attendance.punchOut) {
-      return res.status(400).json({
-        success: false,
-        message: "Already punched out",
-      });
-    }
+//     if (attendance.punchOut) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Already punched out",
+//       });
+//     }
 
-    const activeBreak = attendance.breaks?.[attendance.breaks.length - 1];
+//     const activeBreak = attendance.breaks?.[attendance.breaks.length - 1];
 
-    if (activeBreak && !activeBreak.breakOut) {
-      activeBreak.breakOut = new Date();
+//     if (activeBreak && !activeBreak.breakOut) {
+//       activeBreak.breakOut = new Date();
 
-      activeBreak.minutes = Math.floor(
-        (activeBreak.breakOut - activeBreak.breakIn) / 60000
-      );
+//       activeBreak.minutes = Math.floor(
+//         (activeBreak.breakOut - activeBreak.breakIn) / 60000
+//       );
 
-      activeBreak.source = "auto_closed_on_punchout";
-    }
+//       activeBreak.source = "auto_closed_on_punchout";
+//     }
 
-    attendance.shiftName = attendance.shiftName || shiftName;
-    attendance.punchOut = new Date();
-    attendance.punchOutSource = "employee_login";
+//     attendance.shiftName = attendance.shiftName || shiftName;
+//     attendance.punchOut = new Date();
+//     attendance.punchOutSource = "employee_login";
 
-    console.log("Calculating attendance for punch out...",attendance);
+//     console.log("Calculating attendance for punch out...",attendance);
 
-    calculateAttendance(attendance);
+//     calculateAttendance(attendance);
 
-    await attendance.save();
+//     await attendance.save();
 
-    res.status(200).json({
-      success: true,
-      message: "Punch out successful",
-      attendance,
-      display: {
-        punchIn: formatISTDateTime(attendance?.punchIn),
-        punchOut: formatISTDateTime(attendance?.punchOut),
-      }
-    });
-  } catch (error) {
-    console.log("PUNCH OUT ERROR:", error);
+//     res.status(200).json({
+//       success: true,
+//       message: "Punch out successful",
+//       attendance,
+//       display: {
+//         punchIn: formatISTDateTime(attendance?.punchIn),
+//         punchOut: formatISTDateTime(attendance?.punchOut),
+//       }
+//     });
+//   } catch (error) {
+//     console.log("PUNCH OUT ERROR:", error);
 
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
-};
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
 
 // exports.startBreak = async (req, res) => {
 //   try {
@@ -539,6 +539,194 @@ exports.employeePunchOut = async (req, res) => {
 //   }
 // };
 
+
+exports.employeePunchOut = async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+
+    const employee = await Employee.findOne({
+      userId,
+      companyId: req.user.companyId,
+    }).populate("shiftId", "shiftName name");
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found",
+      });
+    }
+
+    const shiftName =
+      employee.shiftId?.shiftName ||
+      employee.shiftId?.name ||
+      employee.shiftType ||
+      "General Shift";
+
+    // Find active attendance
+    let attendance = await Attendance.findOne({
+      companyId: req.user.companyId,
+      employeeId: employee._id,
+      punchIn: { $ne: null },
+      punchOut: null,
+    }).sort({ punchIn: -1 });
+
+    // Fallback
+    if (!attendance) {
+      const attendanceDate = getAttendanceDateByShift(shiftName);
+
+      attendance = await Attendance.findOne({
+        companyId: req.user.companyId,
+        employeeId: employee._id,
+        attendanceDate,
+      });
+    }
+
+    if (!attendance || !attendance.punchIn) {
+      return res.status(400).json({
+        success: false,
+        message: "Please Punch In first.",
+      });
+    }
+
+    if (attendance.punchOut) {
+      return res.status(400).json({
+        success: false,
+        message: "Already punched out.",
+      });
+    }
+
+    // Close active break automatically
+    if (attendance.breaks?.length) {
+      const activeBreak =
+        attendance.breaks[attendance.breaks.length - 1];
+
+      if (activeBreak && !activeBreak.breakOut) {
+        activeBreak.breakOut = new Date();
+
+        activeBreak.minutes = Math.floor(
+          (activeBreak.breakOut - activeBreak.breakIn) / 60000
+        );
+
+        activeBreak.source = "auto_closed_on_punchout";
+      }
+    }
+
+    attendance.shiftName = shiftName;
+
+    attendance.punchOut = new Date();
+
+    attendance.punchOutSource =
+      req.body.punchOutSource || "employee_login";
+
+    /* =====================================
+       Break Calculation
+    ===================================== */
+
+    let actualBreakMinutes = 0;
+
+    if (attendance.breaks?.length) {
+      actualBreakMinutes = attendance.breaks.reduce(
+        (sum, item) => {
+          if (item.minutes) {
+            return sum + item.minutes;
+          }
+
+          if (item.breakIn && item.breakOut) {
+            return (
+              sum +
+              Math.floor(
+                (new Date(item.breakOut) -
+                  new Date(item.breakIn)) /
+                  60000
+              )
+            );
+          }
+
+          return sum;
+        },
+        0
+      );
+    }
+
+    attendance.totalBreakMinutes = Math.max(
+      60,
+      actualBreakMinutes
+    );
+
+    attendance.extraBreakMinutes =
+      actualBreakMinutes > 60
+        ? actualBreakMinutes - 60
+        : 0;
+
+    /* =====================================
+       Working Minutes
+    ===================================== */
+
+    const totalMinutes = Math.floor(
+      (attendance.punchOut - attendance.punchIn) / 60000
+    );
+
+    attendance.workingMinutes = Math.max(
+      0,
+      totalMinutes - attendance.totalBreakMinutes
+    );
+
+    attendance.overtimeMinutes =
+      attendance.workingMinutes > 480
+        ? attendance.workingMinutes - 480
+        : 0;
+
+    /* =====================================
+       Attendance Status
+    ===================================== */
+
+    if (attendance.workingMinutes >= 480) {
+      attendance.status = "present";
+      attendance.session = "full_day";
+    } else if (attendance.workingMinutes >= 240) {
+      attendance.status = "half_day";
+      attendance.session = "half_day";
+    } else {
+      attendance.status = "absent";
+      attendance.session = "absent";
+    }
+
+    console.log("==================================");
+    console.log("Punch In :", attendance.punchIn);
+    console.log("Punch Out:", attendance.punchOut);
+    console.log("Total Minutes:", totalMinutes);
+    console.log(
+      "Break Minutes:",
+      attendance.totalBreakMinutes
+    );
+    console.log(
+      "Working Minutes:",
+      attendance.workingMinutes
+    );
+    console.log("Status:", attendance.status);
+    console.log("Session:", attendance.session);
+    console.log("==================================");
+
+    await attendance.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Punch out successful",
+      attendance,
+      display: {
+        punchIn: formatISTDateTime(attendance.punchIn),
+        punchOut: formatISTDateTime(attendance.punchOut),
+      },
+    });
+  } catch (error) {
+    console.error("PUNCH OUT ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 exports.startBreak = async (req, res) => {
   try {
     const userId = getUserId(req);
