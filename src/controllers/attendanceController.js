@@ -453,19 +453,11 @@ exports.employeePunchIn = async (req, res) => {
 //       activeBreak.source = "auto_closed_on_punchout";
 //     }
 
-<<<<<<< HEAD
-//     attendance.shiftName = attendance.shiftName || shiftName;
-//     attendance.punchOut = new Date();
-//     attendance.punchOutSource = "employee_login";
-
-//     console.log("Calculating attendance for punch out...",attendance);
-=======
-    attendance.shiftName = attendance.shiftName || shiftName;
-    attendance.punchOut = new Date();
-    attendance.punchOutSource = "employee_login";
-    attendance.punchOutDevice = getDeviceInfo(req);
-    console.log("Calculating attendance for punch out...",attendance);
->>>>>>> ee62e6019a5912cd2bde302d0e15f5b1193f019a
+    // attendance.shiftName = attendance.shiftName || shiftName;
+    // attendance.punchOut = new Date();
+    // attendance.punchOutSource = "employee_login";
+    // attendance.punchOutDevice = getDeviceInfo(req);
+    // console.log("Calculating attendance for punch out...",attendance);
 
 //     calculateAttendance(attendance);
 
