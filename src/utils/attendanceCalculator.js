@@ -27,7 +27,16 @@ exports.calculateAttendance = (attendance) => {
   if (!attendance) return attendance;
 
   let actualBreakMinutes = 0;
+  let requiredMinutes = FULL_DAY_MINUTES;
 
+    const day = new Date(attendance.attendanceDate)
+  .toLocaleDateString("en-US", { weekday: "long" });
+
+  if (day === "Saturday") {
+    requiredMinutes = 390; // 7.5 hours after 60 min break
+  }
+
+  const halfDayMinutes = requiredMinutes / 2;
   /* =========================================
      Calculate Break Minutes
   ========================================= */
@@ -74,18 +83,18 @@ exports.calculateAttendance = (attendance) => {
     );
 
     attendance.overtimeMinutes =
-      attendance.workingMinutes > FULL_DAY_MINUTES
-        ? attendance.workingMinutes - FULL_DAY_MINUTES
+      attendance.workingMinutes > requiredMinutes
+        ? attendance.workingMinutes - requiredMinutes
         : 0;
 
     /* =========================================
        Status & Session
     ========================================= */
 
-    if (attendance.workingMinutes >= FULL_DAY_MINUTES) {
+    if (attendance.workingMinutes >= requiredMinutes) {
       attendance.status = "present";
       attendance.session = "full_day";
-    } else if (attendance.workingMinutes >= HALF_DAY_MINUTES) {
+    } else if (attendance.workingMinutes >= halfDayMinutes) {
       attendance.status = "half_day";
       attendance.session = "half_day";
     } else {
