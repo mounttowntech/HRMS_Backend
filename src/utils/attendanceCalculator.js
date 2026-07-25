@@ -33,7 +33,7 @@ exports.calculateAttendance = (attendance) => {
   .toLocaleDateString("en-US", { weekday: "long" });
 
   if (day === "Saturday") {
-    requiredMinutes = 390; // 7.5 hours after 60 min break
+    requiredMinutes = 450; // 7.5 hours after 60 min break
   }
 
   const halfDayMinutes = requiredMinutes / 2;
