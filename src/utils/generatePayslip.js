@@ -1,24 +1,96 @@
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
+const { toWords } = require("number-to-words");
 
-const formatAmount = (amount) => {
-  return Number(amount || 0).toLocaleString("en-IN", {
+//==================================================
+// FORMAT CURRENCY
+//==================================================
+
+const formatAmount = (amount = 0) => {
+  return Number(amount).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 };
 
-const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
-  return new Promise((resolve, reject) => {
-    const folderPath = path.join(process.cwd(), "uploads", "payslips");
+//==================================================
+// FORMAT DATE
+// DD/MM/YYYY
+//==================================================
+
+const formatDate = (date) => {
+  if (!date) return "";
+
+  const d = new Date(date);
+
+  return `${String(d.getDate()).padStart(2, "0")}/${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}/${d.getFullYear()}`;
+};
+
+//==================================================
+// NUMBER TO WORDS
+//==================================================
+
+const amountInWords = (amount) => {
+  amount = Math.round(Number(amount || 0));
+
+  return (
+    "Rupees " +
+    toWords(amount)
+      .replace(/\b\w/g, (c) => c.toUpperCase()) +
+    " Only"
+  );
+};
+
+//==================================================
+// GENERATE PAYSLIP
+//==================================================
+
+const generatePayslip = async ({
+  employee,
+  payrollData,
+  monthName,
+  year,
+}) => {
+  return new Promise((resolve, reject) => {    //==========================================
+    // CREATE FOLDER
+    //==========================================
+
+    const folderPath = path.join(
+      process.cwd(),
+      "uploads",
+      "payslips"
+    );
 
     if (!fs.existsSync(folderPath)) {
-      fs.mkdirSync(folderPath, { recursive: true });
+      fs.mkdirSync(folderPath, {
+        recursive: true,
+      });
     }
 
-    const fileName = `${employee.employeeCode}-${monthName}-${year}-payslip.pdf`;
+    //==========================================
+    // FILE NAME
+    //==========================================
+
+    const today = new Date();
+
+    const fileName =
+      employee.fullName.replace(/\s+/g, "_") +
+      "_" +
+      String(today.getDate()).padStart(2, "0") +
+      "_" +
+      String(today.getMonth() + 1).padStart(2, "0") +
+      "_" +
+      today.getFullYear() +
+      ".pdf";
+
     const filePath = path.join(folderPath, fileName);
+
+    //==========================================
+    // PDF
+    //==========================================
 
     const doc = new PDFDocument({
       size: "A4",
@@ -26,207 +98,576 @@ const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
     });
 
     const stream = fs.createWriteStream(filePath);
+
     doc.pipe(stream);
+        //==========================================
+    // COMPANY HEADER
+    //==========================================
 
     doc
-      .fontSize(16)
       .font("Helvetica-Bold")
-      .text("Mounttown Technology Private Limited", { align: "center" });
-
-    doc
-      .fontSize(9)
-      .font("Helvetica")
-      .text("4A, 3rd Street, Co-operative colony, Mettupalayam 641301.", {
+      .fontSize(18)
+      .text("Mounttown Technology Private Limited", {
         align: "center",
       });
 
-    doc.text("www.themounttown.com | hr@themounttown.com", {
+    doc.moveDown(0.2);
+
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text(
+        "4A, 3rd Street, Co-operative Colony, Mettupalayam - 641301",
+        {
+          align: "center",
+        }
+      );
+
+    doc.text("www.themounttown.com", {
       align: "center",
     });
 
-    doc.text("+919363969381 | +919500980047", {
+    doc.text("hr@themounttown.com", {
       align: "center",
     });
 
-    doc.text("GST - 33AAQCM8928E1Z4", {
+    doc.text("+91 9363969381", {
       align: "center",
-    });
-
-    doc.moveDown(0.5);
-
-    doc.fontSize(14).font("Helvetica-Bold").text("Pay Slip", {
-      align: "center",
-      underline: true,
     });
 
     doc.moveDown();
 
-    const startX = 35;
-    let y = doc.y + 5;
-    const rowHeight = 22;
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(15)
+      .text(
+        `PAYSLIP - ${monthName.toUpperCase()} ${year}`,
+        {
+          align: "center",
+        }
+      );
 
-    const drawInfoRow = (leftLabel, leftValue, rightLabel, rightValue) => {
-      doc.fontSize(9).font("Helvetica");
+    doc.moveDown(1.5);
+        //=========================================================
+    // EMPLOYEE DETAILS
+    //=========================================================
 
-      doc.text(leftLabel, startX, y, { width: 110 });
-      doc.text(":", startX + 120, y);
-      doc.text(String(leftValue || ""), startX + 135, y, { width: 190 });
+    const leftX = 35;
+    const rightX = 320;
 
-      doc.text(rightLabel, startX + 330, y, { width: 110 });
-      doc.text(":", startX + 455, y);
-      doc.text(String(rightValue || ""), startX + 470, y, { width: 100 });
+    const labelWidth = 95;
+    const valueWidth = 150;
 
-      y += rowHeight;
+    let detailY = doc.y;
+
+    const detailRowHeight = 24;
+
+    const drawDetailRow = (
+      leftLabel,
+      leftValue,
+      rightLabel,
+      rightValue
+    ) => {
+
+      doc.font("Helvetica-Bold").fontSize(9);
+
+      // Left Label
+
+      doc.text(
+        leftLabel,
+        leftX,
+        detailY,
+        {
+          width: labelWidth,
+        }
+      );
+
+      // Left Value
+
+      doc.font("Helvetica");
+
+      doc.text(
+        leftValue ? String(leftValue) : "-",
+        leftX + labelWidth + 10,
+        detailY,
+        {
+          width: valueWidth,
+        }
+      );
+
+      // Right Label
+
+      if (rightLabel) {
+
+        doc.font("Helvetica-Bold");
+
+        doc.text(
+          rightLabel,
+          rightX,
+          detailY,
+          {
+            width: labelWidth,
+          }
+        );
+
+        // Right Value
+
+        doc.font("Helvetica");
+
+        doc.text(
+          rightValue ? String(rightValue) : "-",
+          rightX + labelWidth + 10,
+          detailY,
+          {
+            width: valueWidth,
+          }
+        );
+      }
+
+      detailY += detailRowHeight;
+
     };
 
-    drawInfoRow(
-      "Date of Joining",
-      employee.joiningDate
-        ? new Date(employee.joiningDate).toLocaleDateString("en-IN")
-        : "",
-      "Employee name",
-      employee.fullName
+    //=========================================================
+    // ROWS
+    //=========================================================
+
+    drawDetailRow(
+      "Employee Name",
+      employee.fullName,
+      "Employee Code",
+      employee.employeeCode
     );
 
-    drawInfoRow(
-      "Pay Period",
-      `${monthName}-${year}`,
+    drawDetailRow(
+      "Department",
+      payrollData.department,
       "Designation",
       payrollData.designation
     );
 
-    drawInfoRow(
-      "Worked Days",
-      String(payrollData.presentDays),
+    drawDetailRow(
+      "Joining Date",
+      formatDate(employee.joiningDate),
       "Shift",
       payrollData.shiftName
     );
 
-    y += 10;
+    drawDetailRow(
+      "Pay Period",
+      `${monthName} ${year}`,
+      "Generated",
+      formatDate(new Date())
+    );
 
-    const tableX = 35;
-    const c1 = 170;
-    const c2 = 120;
-    const c3 = 160;
-    const c4 = 110;
-    const tableWidth = c1 + c2 + c3 + c4;
+    drawDetailRow(
+      "Working Days",
+      payrollData.totalWorkingDays,
+      "Paid Days",
+      payrollData.paidDays
+    );
 
-    const drawCell = (x, y, w, h, text, bold = false, align = "left") => {
-      doc.rect(x, y, w, h).stroke();
+    drawDetailRow(
+      "Present Days",
+      payrollData.presentDays,
+      "Absent Days",
+      payrollData.absentDays
+    );
 
-      doc.fontSize(8.8).font(bold ? "Helvetica-Bold" : "Helvetica");
+    drawDetailRow(
+      "Paid Leave",
+      payrollData.paidLeaveDays,
+      "Holiday",
+      payrollData.holidayDays
+    );
 
-      doc.text(String(text || ""), x + 5, y + 7, {
-        width: w - 10,
-        align,
-        lineBreak: false,
-      });
+    drawDetailRow(
+      "Week Off",
+      payrollData.weekOffDays,
+      "",
+      ""
+    );
+
+    //=========================================================
+    // SPACE BEFORE TABLE
+    //=========================================================
+
+    let tableY = detailY + 25;
+        //=========================================================
+    // SALARY TABLE
+    //=========================================================
+
+    const tableRowHeight = 24;
+
+    const earningsX = 35;
+    const earningsWidth = 180;
+
+    const amountX = earningsX + earningsWidth;
+    const amountWidth = 90;
+
+    const deductionX = amountX + amountWidth;
+    const deductionWidth = 180;
+
+    const deductionAmountX = deductionX + deductionWidth;
+    const deductionAmountWidth = 90;
+
+    //=========================================================
+    // DRAW CELL
+    //=========================================================
+
+    const drawCell = (
+      x,
+      y,
+      width,
+      height,
+      text,
+      bold = false,
+      align = "left",
+      header = false
+    ) => {
+
+      if (header) {
+        doc
+          .save()
+          .fillColor("#E6E6E6")
+          .rect(x, y, width, height)
+          .fill()
+          .restore();
+      }
+
+      doc.rect(x, y, width, height).stroke();
+
+      doc
+        .font(bold ? "Helvetica-Bold" : "Helvetica")
+        .fontSize(9)
+        .fillColor("black")
+        .text(
+          text !== undefined && text !== null
+            ? String(text)
+            : "",
+          x + 5,
+          y + 7,
+          {
+            width: width - 10,
+            align,
+          }
+        );
+
     };
 
-    const drawHeaderCell = (x, y, w, h, text) => {
-      doc.rect(x, y, w, h).fillAndStroke("#d9d9d9", "#000000");
-      doc.fillColor("#000000");
-      doc.fontSize(9).font("Helvetica-Bold");
+    //=========================================================
+    // TABLE HEADER
+    //=========================================================
 
-      doc.text(text, x + 5, y + 7, {
-        width: w - 10,
-        align: "left",
-        lineBreak: false,
-      });
-    };
+    drawCell(
+      earningsX,
+      tableY,
+      earningsWidth,
+      tableRowHeight,
+      "Earnings",
+      true,
+      "left",
+      true
+    );
 
-    drawHeaderCell(tableX, y, c1, rowHeight, "Earnings");
-    drawHeaderCell(tableX + c1, y, c2, rowHeight, "Amount");
-    drawHeaderCell(tableX + c1 + c2, y, c3, rowHeight, "Deductions");
-    drawHeaderCell(tableX + c1 + c2 + c3, y, c4, rowHeight, "Amount");
+    drawCell(
+      amountX,
+      tableY,
+      amountWidth,
+      tableRowHeight,
+      "Amount",
+      true,
+      "right",
+      true
+    );
 
-    y += rowHeight;
+    drawCell(
+      deductionX,
+      tableY,
+      deductionWidth,
+      tableRowHeight,
+      "Deductions",
+      true,
+      "left",
+      true
+    );
 
-    const shiftLabel = payrollData.shiftName?.toLowerCase().includes("night")
-      ? "Night Shift Allowance"
-      : "Day Shift Allowance";
+    drawCell(
+      deductionAmountX,
+      tableY,
+      deductionAmountWidth,
+      tableRowHeight,
+      "Amount",
+      true,
+      "right",
+      true
+    );
 
-    const rows = [
+    tableY += tableRowHeight;
+
+    //=========================================================
+    // EARNINGS / DEDUCTIONS
+    //=========================================================
+
+    const salaryRows = [
       [
         "Basic Salary",
-        formatAmount(payrollData.basicSalary),
-        "PF & ESI",
-        formatAmount(payrollData.totalDeduction),
+        payrollData.basicSalary,
+        "Provident Fund (PF)",
+        payrollData.pfDeduction,
       ],
-      ["House Rent Allowance (HRA)", formatAmount(payrollData.hra), "", ""],
-      [shiftLabel, formatAmount(payrollData.shiftAllowance), "", ""],
-      ["Medical Allowance", formatAmount(payrollData.medicalAllowance), "", ""],
+
+      [
+        "House Rent Allowance",
+        payrollData.hra,
+        "ESI",
+        payrollData.esiDeduction,
+      ],
+
+      [
+        "Medical Allowance",
+        payrollData.medicalAllowance,
+        "",
+        "",
+      ],
+
       [
         "Conveyance Allowance",
-        formatAmount(payrollData.conveyanceAllowance),
+        payrollData.conveyanceAllowance,
         "",
         "",
       ],
-      ["Other Allowance", formatAmount(payrollData.otherAllowance), "", ""],
+
+      [
+        "Shift Allowance",
+        payrollData.shiftAllowance,
+        "",
+        "",
+      ],
+
+      [
+        "Other Allowance",
+        payrollData.otherAllowance,
+        "",
+        "",
+      ],
     ];
 
-    rows.forEach((row) => {
-      drawCell(tableX, y, c1, rowHeight, row[0]);
-      drawCell(tableX + c1, y, c2, rowHeight, row[1], false, "right");
-      drawCell(tableX + c1 + c2, y, c3, rowHeight, row[2]);
+    salaryRows.forEach((item) => {
+
       drawCell(
-        tableX + c1 + c2 + c3,
-        y,
-        c4,
-        rowHeight,
-        row[3],
+        earningsX,
+        tableY,
+        earningsWidth,
+        tableRowHeight,
+        item[0]
+      );
+
+      drawCell(
+        amountX,
+        tableY,
+        amountWidth,
+        tableRowHeight,
+        formatAmount(item[1]),
         false,
         "right"
       );
 
-      y += rowHeight;
+      drawCell(
+        deductionX,
+        tableY,
+        deductionWidth,
+        tableRowHeight,
+        item[2]
+      );
+
+      drawCell(
+        deductionAmountX,
+        tableY,
+        deductionAmountWidth,
+        tableRowHeight,
+        item[3] === ""
+          ? ""
+          : formatAmount(item[3]),
+        false,
+        "right"
+      );
+
+      tableY += tableRowHeight;
+
     });
 
-    drawCell(tableX, y, c1, rowHeight, "Total Earnings", true);
+    //=========================================================
+    // TOTALS
+    //=========================================================
+
     drawCell(
-      tableX + c1,
-      y,
-      c2,
-      rowHeight,
+      earningsX,
+      tableY,
+      earningsWidth,
+      tableRowHeight,
+      "Gross Earnings",
+      true
+    );
+
+    drawCell(
+      amountX,
+      tableY,
+      amountWidth,
+      tableRowHeight,
       formatAmount(payrollData.grossEarning),
       true,
       "right"
     );
 
-    drawCell(tableX + c1 + c2, y, c3, rowHeight, "Total Deductions", true);
     drawCell(
-      tableX + c1 + c2 + c3,
-      y,
-      c4,
-      rowHeight,
+      deductionX,
+      tableY,
+      deductionWidth,
+      tableRowHeight,
+      "Total Deductions",
+      true
+    );
+
+    drawCell(
+      deductionAmountX,
+      tableY,
+      deductionAmountWidth,
+      tableRowHeight,
       formatAmount(payrollData.totalDeduction),
       true,
       "right"
     );
 
-    y += rowHeight;
+    tableY += tableRowHeight;
 
-    drawCell(tableX, y, c1 + c2, rowHeight, "");
-    drawCell(tableX + c1 + c2, y, c3, rowHeight, "Net Pay", true);
+    //=========================================================
+    // NET SALARY
+    //=========================================================
+
     drawCell(
-      tableX + c1 + c2 + c3,
-      y,
-      c4,
-      rowHeight,
+      earningsX,
+      tableY,
+      earningsWidth + amountWidth,
+      tableRowHeight,
+      "NET SALARY",
+      true,
+      "center"
+    );
+
+    drawCell(
+      deductionX,
+      tableY,
+      deductionWidth + deductionAmountWidth,
+      tableRowHeight,
       formatAmount(payrollData.netSalary),
       true,
       "right"
     );
 
-    y += rowHeight + 10;
+    tableY += 45;
+        //=========================================================
+    // AMOUNT IN WORDS
+    //=========================================================
+
+    tableY += 15;
 
     doc
-      .fontSize(8)
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .text(
+        "Amount in Words :",
+        35,
+        tableY,
+        {
+          width: 120,
+        }
+      );
+
+    doc
       .font("Helvetica")
-      .text("This is a system generated payslip.", tableX, y, {
-        width: tableWidth,
-        align: "center",
-      });
+      .fontSize(10)
+      .text(
+        amountInWords(payrollData.netSalary),
+        155,
+        tableY,
+        {
+          width: 380,
+          align: "left",
+        }
+      );
+
+    //=========================================================
+    // EXTRA SPACE
+    //=========================================================
+
+    tableY += 50;
+
+    //=========================================================
+    // FOOTER LINE
+    //=========================================================
+
+    doc
+      .moveTo(35, tableY)
+      .lineTo(560, tableY)
+      .stroke();
+
+    tableY += 15;
+
+    //=========================================================
+    // FOOTER TEXT
+    //=========================================================
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .text(
+        "This is a system generated payslip and does not require a signature.",
+        35,
+        tableY,
+        {
+          width: 525,
+          align: "center",
+        }
+      );
+
+    //=========================================================
+    // SIGNATURE
+    //=========================================================
+
+    tableY += 45;
+
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(10)
+      .text(
+        "Authorized Signatory",
+        405,
+        tableY
+      );
+
+    //=========================================================
+    // COMPANY NAME
+    //=========================================================
+
+    tableY += 18;
+
+    doc
+      .font("Helvetica")
+      .fontSize(9)
+      .text(
+        "Mounttown Technology Private Limited",
+        355,
+        tableY,
+        {
+          width: 180,
+          align: "center",
+        }
+      );
+
+    //=========================================================
+    // CLOSE PDF
+    //=========================================================
 
     doc.end();
 
@@ -234,10 +675,12 @@ const generatePayslip = async ({ employee, payrollData, monthName, year }) => {
       resolve(`/uploads/payslips/${fileName}`);
     });
 
-    stream.on("error", (error) => {
-      reject(error);
+    stream.on("error", (err) => {
+      reject(err);
     });
+
   });
+
 };
 
 module.exports = generatePayslip;

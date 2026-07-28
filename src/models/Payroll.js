@@ -12,62 +12,53 @@ const payrollEmployeeSchema = new mongoose.Schema(
     employeeName: String,
     role: String,
 
-    totalWorkingDays: {
-      type: Number,
-      default: 0,
-    },
+    department: String,
+    designation: String,
+    shiftName: String,
 
-    presentDays: {
-      type: Number,
-      default: 0,
-    },
+    totalWorkingDays: Number,
 
-    absentDays: {
-      type: Number,
-      default: 0,
-    },
+    presentDays: Number,
 
-    basicSalary: {
-      type: Number,
-      default: 0,
-    },
+    paidLeaveDays: Number,
 
-    perDaySalary: {
-      type: Number,
-      default: 0,
-    },
+    holidayDays: Number,
 
-    grossEarning: {
-      type: Number,
-      default: 0,
-    },
+    weekOffDays: Number,
 
-    pfDeduction: {
-      type: Number,
-      default: 0,
-    },
+    paidDays: Number,
 
-    esiDeduction: {
-      type: Number,
-      default: 0,
-    },
+    absentDays: Number,
 
-    totalDeduction: {
-      type: Number,
-      default: 0,
-    },
+    basicSalary: Number,
 
-    netSalary: {
-      type: Number,
-      default: 0,
-    },
+    perDaySalary: Number,
 
-    payslipUrl: {
-      type: String,
-      default: "",
-    },
+    hra: Number,
+
+    medicalAllowance: Number,
+
+    conveyanceAllowance: Number,
+
+    shiftAllowance: Number,
+
+    otherAllowance: Number,
+
+    grossEarning: Number,
+
+    pfDeduction: Number,
+
+    esiDeduction: Number,
+
+    totalDeduction: Number,
+
+    netSalary: Number,
+
+    payslipUrl: String,
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
 
 const payrollSchema = new mongoose.Schema(
@@ -78,63 +69,56 @@ const payrollSchema = new mongoose.Schema(
       required: true,
     },
 
-    month: {
-      type: Number,
-      required: true,
-    },
+    payrollName: String,
 
-    year: {
-      type: Number,
-      required: true,
-    },
+    month: Number,
 
-    payrollName: {
-      type: String,
-      required: true,
-    },
+    year: Number,
 
-    period: {
-      type: String,
-      required: true,
-    },
+    period: String,
 
-    totalEmployees: {
-      type: Number,
-      default: 0,
-    },
+    totalEmployees: Number,
 
-    totalEarnings: {
-      type: Number,
-      default: 0,
-    },
+    totalEarnings: Number,
 
-    totalDeductions: {
-      type: Number,
-      default: 0,
-    },
+    totalDeductions: Number,
 
-    netPayroll: {
-      type: Number,
-      default: 0,
-    },
+    netPayroll: Number,
 
     employees: [payrollEmployeeSchema],
-
-    status: {
-      type: String,
-      enum: ["Processed", "Pending", "Completed"],
-      default: "Processed",
-    },
 
     processedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      default: null,
+    },
+
+    status: {
+      type: String,
+      enum: [
+        "Pending",
+        "Processed",
+        "Completed",
+      ],
+      default: "Completed",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-payrollSchema.index({ companyId: 1, month: 1, year: 1 }, { unique: true });
+payrollSchema.index(
+  {
+    companyId: 1,
+    month: 1,
+    year: 1,
+  },
+  {
+    unique: true,
+  }
+);
 
-module.exports = mongoose.model("Payroll", payrollSchema);
+module.exports = mongoose.model(
+  "Payroll",
+  payrollSchema
+);

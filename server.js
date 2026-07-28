@@ -46,7 +46,7 @@ logStep("STEP 4: app.js loaded");
 // );
 logStep("STEP 5: startup-test created");
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8000;
 const mongoURI = process.env.MONGODB_ATLAS;
 
 logStep("STEP 6: PORT = " + PORT);
