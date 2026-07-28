@@ -3,11 +3,13 @@ const fs = require("fs");
 
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
+const Leave = require("../models/Leave");
+const Holiday = require("../models/Holiday");
 const Payroll = require("../models/Payroll");
 
 const {
   getMonthRangeByMonthYear,
-} = require("../utils/dashboardutils");
+} = require("../utils/dashboardUtils");
 
 const generatePayslip = require("../utils/generatePayslip");
 const sendEmail = require("../utils/sendMail");
@@ -15,7 +17,25 @@ const sendEmail = require("../utils/sendMail");
 const roundAmount = (amount) => {
   return Number((amount || 0).toFixed(2));
 };
+const getWeekOffCount = (start, end, weekOff = []) => {
+  let count = 0;
 
+  for (
+    let date = new Date(start);
+    date <= end;
+    date.setDate(date.getDate() + 1)
+  ) {
+    const dayName = date.toLocaleDateString("en-US", {
+      weekday: "long",
+    });
+
+    if (weekOff.includes(dayName)) {
+      count++;
+    }
+  }
+
+  return count;
+};
 const getPayslipFilePath = (payslipUrl) => {
   const cleanPath = payslipUrl.replace(/^\/+/, "");
   return path.join(__dirname, "..", cleanPath);
@@ -25,12 +45,13 @@ const getPayslipFilePath = (payslipUrl) => {
 exports.processPayroll = async (req, res) => {
   try {
     const companyId = req.user.companyId;
+
     const { month, year } = req.body;
 
     if (!month || !year) {
       return res.status(400).json({
         success: false,
-        message: "Month and year are required",
+        message: "Month and Year are required",
       });
     }
 
@@ -43,187 +64,390 @@ exports.processPayroll = async (req, res) => {
     if (existingPayroll) {
       return res.status(400).json({
         success: false,
-        message: "Payroll already processed for this month",
+        message: "Payroll already processed.",
       });
     }
 
-    const { start, end } = getMonthRangeByMonthYear(month, year);
+    const { start, end } = getMonthRangeByMonthYear(
+      month,
+      year
+    );
 
-    const monthName = new Date(year, month - 1).toLocaleString("en-US", {
-      month: "short",
+    const monthName = new Date(
+      year,
+      month - 1
+    ).toLocaleString("en-US", {
+      month: "long",
     });
 
     const employees = await Employee.find({
       companyId,
       status: "active",
-      role: {
-        $in: ["employee", "teamlead", "projectmanager", "hr"],
-      },
     })
-      .populate("designationId", "name designationName")
-      .populate("shiftId", "shiftName name shiftType")
+      .populate("designationId", "name")
+      .populate("shiftId")
       .lean();
 
-    const payrollEmployees = [];
+    let payrollEmployees = [];
 
     let totalEarnings = 0;
     let totalDeductions = 0;
     let netPayroll = 0;
 
     for (const employee of employees) {
-      const shiftName =
-        employee.shiftId?.shiftName ||
-        employee.shiftId?.name ||
-        employee.shiftId?.shiftType ||
-        employee.shiftType ||
-        "N/A";
+      //===================================
+      // PRESENT DAYS
+      //===================================
 
-      const designation =
-        employee.designationId?.name ||
-        employee.designationId?.designationName ||
-        employee.designation ||
-        employee.role ||
-        "N/A";
+      const presentDays =
+        await Attendance.countDocuments({
+          companyId,
+          employeeId: employee._id,
+          status: "present",
+          date: {
+            $gte: start,
+            $lte: end,
+          },
+        });
 
-      const isNightShift = shiftName.toLowerCase().includes("night");
+      //===================================
+      // PAID LEAVE DAYS
+      //===================================
 
-      const totalWorkingDays = isNightShift ? 22 : 24;
+      const paidLeaveDays =
+        await Leave.aggregate([
+          {
+            $match: {
+              companyId: employee.companyId,
+              employeeId: employee._id,
+              leaveType: "paid",
+              status: "approved",
+              fromDate: {
+                $lte: end,
+              },
+              toDate: {
+                $gte: start,
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              total: {
+                $sum: "$days",
+              },
+            },
+          },
+        ]);
 
-      const presentDays = await Attendance.countDocuments({
-        companyId,
-        employeeId: employee._id,
-        date: { $gte: start, $lte: end },
-        status: "present",
-      });
+      const paidLeaves =
+        paidLeaveDays.length > 0
+          ? paidLeaveDays[0].total
+          : 0;
 
-      const absentDays = Math.max(0, totalWorkingDays - presentDays);
+      //===================================
+      // HOLIDAYS
+      //===================================
 
-      const monthlySalary = Number(employee.salary || employee.basicSalary || 0);
+      const holidayCount =
+        await Holiday.countDocuments({
+          companyId,
+          holidayDate: {
+            $gte: start,
+            $lte: end,
+          },
+        });
+
+      //===================================
+      // WEEK OFF
+      //===================================
+
+      const weekOffCount =
+        getWeekOffCount(
+          start,
+          end,
+          employee.shiftId?.weekOff || ["Sunday"]
+        );
+
+      //===================================
+      // TOTAL DAYS
+      //===================================
+
+      const totalDays =
+        new Date(year, month, 0).getDate();
+
+      //===================================
+      // PAID DAYS
+      //===================================
+
+      const paidDays =
+        presentDays +
+        paidLeaves +
+        holidayCount +
+        weekOffCount;
+
+      const absentDays =
+        Math.max(
+          0,
+          totalDays - paidDays
+        );
+
+      //===================================
+      // SALARY
+      //===================================
+
+      const monthlySalary =
+        Number(employee.salary || 0);
 
       const perDaySalary =
-        totalWorkingDays > 0 ? monthlySalary / totalWorkingDays : 0;
+        monthlySalary / totalDays;
 
-      const earnedSalary = perDaySalary * presentDays;
+      const earnedSalary =
+        perDaySalary * paidDays;
 
-      const basicSalary = isNightShift
-        ? earnedSalary * 0.4
-        : earnedSalary * 0.5;
+      //===================================
+      // EARNINGS
+      //===================================
 
-      const hra = basicSalary * 0.4;
+      const basicSalary =
+        earnedSalary * 0.50;
 
-      const shiftAllowance = isNightShift
-        ? earnedSalary * 0.1
-        : earnedSalary * 0.05;
+      const hra =
+        basicSalary * 0.40;
 
-      const medicalAllowance = earnedSalary * 0.0852;
-      const conveyanceAllowance = earnedSalary * 0.0852;
+      const medicalAllowance =
+        earnedSalary * 0.10;
 
-      const calculatedTotal =
-        basicSalary +
-        hra +
-        shiftAllowance +
-        medicalAllowance +
-        conveyanceAllowance;
+      const conveyanceAllowance =
+        earnedSalary * 0.10;
 
-      const otherAllowance = Math.max(0, earnedSalary - calculatedTotal);
+      const shiftAllowance =
+        employee.shiftId?.shiftType ===
+        "night"
+          ? earnedSalary * 0.10
+          : earnedSalary * 0.05;
+
+      const otherAllowance =
+        Math.max(
+          0,
+          earnedSalary -
+            (
+              basicSalary +
+              hra +
+              medicalAllowance +
+              conveyanceAllowance +
+              shiftAllowance
+            )
+        );
 
       const grossEarning =
         basicSalary +
         hra +
-        shiftAllowance +
         medicalAllowance +
         conveyanceAllowance +
+        shiftAllowance +
         otherAllowance;
 
-      const pfDeduction = basicSalary * 0.12;
-      const esiDeduction = grossEarning <= 21000 ? grossEarning * 0.0075 : 0;
+      //===================================
+      // DEDUCTIONS
+      //===================================
 
-      const totalDeduction = pfDeduction + esiDeduction;
-      const netSalary = grossEarning - totalDeduction;
+      const pfDeduction =
+        basicSalary * 0.12;
+
+      const esiDeduction =
+        grossEarning <= 21000
+          ? grossEarning * 0.0075
+          : 0;
+
+      const totalDeduction =
+        pfDeduction +
+        esiDeduction;
+
+      const netSalary =
+        grossEarning -
+        totalDeduction;
+
+      //===================================
+      // PAYSLIP
+      //===================================
 
       const payrollData = {
-        totalWorkingDays,
+        totalWorkingDays: totalDays,
+
         presentDays,
+
+        paidLeaveDays: paidLeaves,
+
+        holidayDays: holidayCount,
+
+        weekOffDays: weekOffCount,
+
+        paidDays,
+
         absentDays,
 
-        monthlySalary: roundAmount(monthlySalary),
-        perDaySalary: roundAmount(perDaySalary),
+        monthlySalary:
+          roundAmount(monthlySalary),
 
-        designation,
-        shiftName,
+        perDaySalary:
+          roundAmount(perDaySalary),
 
-        basicSalary: roundAmount(basicSalary),
-        hra: roundAmount(hra),
-        shiftAllowance: roundAmount(shiftAllowance),
-        medicalAllowance: roundAmount(medicalAllowance),
-        conveyanceAllowance: roundAmount(conveyanceAllowance),
-        otherAllowance: roundAmount(otherAllowance),
+        designation:
+          employee.designationId?.name ||
+          "",
 
-        grossEarning: roundAmount(grossEarning),
+        shiftName:
+          employee.shiftId?.shiftName ||
+          "",
 
-        pfDeduction: roundAmount(pfDeduction),
-        esiDeduction: roundAmount(esiDeduction),
-        totalDeduction: roundAmount(totalDeduction),
+        basicSalary:
+          roundAmount(basicSalary),
 
-        netSalary: roundAmount(netSalary),
+        hra:
+          roundAmount(hra),
+
+        medicalAllowance:
+          roundAmount(
+            medicalAllowance
+          ),
+
+        conveyanceAllowance:
+          roundAmount(
+            conveyanceAllowance
+          ),
+
+        shiftAllowance:
+          roundAmount(
+            shiftAllowance
+          ),
+
+        otherAllowance:
+          roundAmount(
+            otherAllowance
+          ),
+
+        grossEarning:
+          roundAmount(
+            grossEarning
+          ),
+
+        pfDeduction:
+          roundAmount(
+            pfDeduction
+          ),
+
+        esiDeduction:
+          roundAmount(
+            esiDeduction
+          ),
+
+        totalDeduction:
+          roundAmount(
+            totalDeduction
+          ),
+
+        netSalary:
+          roundAmount(netSalary),
       };
 
-      const payslipUrl = await generatePayslip({
-        employee,
-        payrollData,
-        monthName,
-        year,
-      });
+      const payslipUrl =
+        await generatePayslip({
+          employee,
+          payrollData,
+          monthName,
+          year,
+        });
 
       payrollEmployees.push({
-        employeeId: employee._id,
-        employeeCode: employee.employeeCode,
-        employeeName: employee.fullName,
-        role: employee.role,
-        designation,
-        shiftName,
+        employeeId:
+          employee._id,
+
+        employeeCode:
+          employee.employeeCode,
+
+        employeeName:
+          employee.fullName,
+
+        role:
+          employee.role,
 
         ...payrollData,
 
         payslipUrl,
       });
 
-      totalEarnings += payrollData.grossEarning;
-      totalDeductions += payrollData.totalDeduction;
-      netPayroll += payrollData.netSalary;
+      totalEarnings +=
+        grossEarning;
+
+      totalDeductions +=
+        totalDeduction;
+
+      netPayroll +=
+        netSalary;
     }
 
-    const payroll = await Payroll.create({
-      companyId,
-      month,
-      year,
-      payrollName: `${monthName}-${year} Payroll`,
-      period: `${start.toLocaleDateString("en-IN")} - ${end.toLocaleDateString(
-        "en-IN"
-      )}`,
-      totalEmployees: employees.length,
-      totalEarnings: roundAmount(totalEarnings),
-      totalDeductions: roundAmount(totalDeductions),
-      netPayroll: roundAmount(netPayroll),
-      employees: payrollEmployees,
-      processedBy: req.user.id || req.user.userId,
-      status: "Completed",
-    });
+    const payroll =
+      await Payroll.create({
+        companyId,
+
+        month,
+
+        year,
+
+        payrollName:
+          `${monthName} Payroll ${year}`,
+
+        period:
+          `${start.toLocaleDateString(
+            "en-GB"
+          )} - ${end.toLocaleDateString(
+            "en-GB"
+          )}`,
+
+        totalEmployees:
+          payrollEmployees.length,
+
+        totalEarnings:
+          roundAmount(
+            totalEarnings
+          ),
+
+        totalDeductions:
+          roundAmount(
+            totalDeductions
+          ),
+
+        netPayroll:
+          roundAmount(
+            netPayroll
+          ),
+
+        employees:
+          payrollEmployees,
+
+        processedBy:
+          req.user.id,
+
+        status:
+          "Completed",
+      });
 
     return res.status(201).json({
       success: true,
-      message: "Payroll processed successfully",
+      message:
+        "Payroll processed successfully",
       data: payroll,
     });
   } catch (error) {
+    console.log(error);
+
     return res.status(500).json({
       success: false,
-      message: "Payroll processing failed",
-      error: error.message,
+      message: error.message,
     });
   }
 };
-
 exports.getAllPayrolls = async (req, res) => {
   try {
     const filter = {
