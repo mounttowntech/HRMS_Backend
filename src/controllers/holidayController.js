@@ -13,15 +13,16 @@ const getUserId = (req) => req.user?.userId || req.user?.id;
 
 exports.createHoliday = async (req, res) => {
   try {
-    const {
-      holidayName,
-      holidayDate,
-      holidayType,
-      description,
-      isPaid,
-    } = req.body;
+     const { name, date, type, description, isPaid } = req.body;
+    // const {
+    //   holidayName,
+    //   holidayDate,
+    //   holidayType,
+    //   description,
+    //   isPaid,
+    // } = req.body;
 
-    if (!holidayName || !holidayDate) {
+    if (!name || !date) {
       return res.status(400).json({
         success: false,
         message: "Holiday name and holiday date are required",
@@ -30,8 +31,8 @@ exports.createHoliday = async (req, res) => {
 
     const alreadyExists = await Holiday.findOne({
       companyId: req.user.companyId,
-      holidayName: holidayName.trim(),
-      holidayDate: new Date(holidayDate),
+      name: name.trim(),
+      date: new Date(date),
     });
 
     if (alreadyExists) {
@@ -43,10 +44,10 @@ exports.createHoliday = async (req, res) => {
 
     const holiday = await Holiday.create({
       companyId: req.user.companyId,
-      holidayName: holidayName.trim(),
-      holidayDate,
-      holidayType: holidayType || "Company",
-      description,
+      name: name.trim(),
+      date: new Date(date),
+      type: type || "Company",
+      description: description || "",
       isPaid: isPaid ?? true,
       status: "active",
     });
@@ -61,8 +62,8 @@ exports.createHoliday = async (req, res) => {
         "projectmanager",
         "employee",
       ],
-      title: `New Holiday - ${holiday.holidayName}`,
-      message: `${holiday.holidayName} has been declared as a holiday.`,
+      title: `New Holiday - ${holiday.name}`,
+      message: `${holiday.name} has been declared as a holiday.`,
       type: "holiday",
       referenceId: holiday._id,
       referenceModel: "Holiday",
@@ -98,7 +99,7 @@ exports.getAllHolidays = async (req, res) => {
     res.status(200).json({
       success: true,
       total: holidays.length,
-      holidays,
+       data: holidays,
     });
   } catch (error) {
     console.log("GET HOLIDAYS ERROR :", error);
@@ -167,7 +168,7 @@ exports.getUpcomingHolidays = async (req, res) => {
     res.status(200).json({
       success: true,
       total: holidays.length,
-      holidays,
+      data: holidays,
     });
   } catch (error) {
     console.log("UPCOMING HOLIDAY ERROR :", error);
@@ -197,14 +198,14 @@ exports.updateHoliday = async (req, res) => {
       });
     }
 
-    if (req.body.holidayName)
-      holiday.holidayName = req.body.holidayName.trim();
+    if (req.body.name)
+      holiday.name = req.body.name.trim();
 
-    if (req.body.holidayDate)
-      holiday.holidayDate = req.body.holidayDate;
+    if (req.body.date)
+      holiday.date = req.body.date;
 
-    if (req.body.holidayType)
-      holiday.holidayType = req.body.holidayType;
+    if (req.body.type)
+      holiday.type = req.body.type;
 
     if (req.body.description !== undefined)
       holiday.description = req.body.description;
@@ -237,7 +238,7 @@ exports.updateHoliday = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Holiday updated successfully",
-      holiday,
+      data: holiday,
     });
   } catch (error) {
     console.log("UPDATE HOLIDAY ERROR :", error);
@@ -269,7 +270,9 @@ exports.deleteHoliday = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Holiday deleted successfully",
+      data: {
+        message: "Holiday deleted successfully",
+      },
     });
   } catch (error) {
     console.log("DELETE HOLIDAY ERROR :", error);
@@ -298,7 +301,7 @@ exports.getPaidHolidays = async (req, res) => {
     res.status(200).json({
       success: true,
       total: holidays.length,
-      holidays,
+      data: holidays,
     });
   } catch (error) {
     console.log("PAID HOLIDAY ERROR :", error);
@@ -344,7 +347,7 @@ exports.getHolidayByMonth = async (req, res) => {
     res.status(200).json({
       success: true,
       total: holidays.length,
-      holidays,
+      data: holidays,
     });
   } catch (error) {
     console.log("MONTH HOLIDAY ERROR :", error);

@@ -86,7 +86,7 @@ router.get(
 // ==========================================
 
 router.put(
-  "/update/:id",
+  "/:id",
   verifyToken,
   allowRoles("admin", "hr"),
   updateHoliday
@@ -97,7 +97,7 @@ router.put(
 // ==========================================
 
 router.delete(
-  "/delete/:id",
+  "/:id",
   verifyToken,
   allowRoles("admin"),
   deleteHoliday
