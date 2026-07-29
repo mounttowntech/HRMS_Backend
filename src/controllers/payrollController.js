@@ -4,7 +4,7 @@ const fs = require("fs");
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
-const Holiday = require("../models/Holiday");
+const Holiday = require("../models/holiday");
 const Payroll = require("../models/Payroll");
 
 const {

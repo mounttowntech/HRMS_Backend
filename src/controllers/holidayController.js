@@ -1,4 +1,4 @@
-const Holiday = require("../models/Holiday");
+const Holiday = require("../models/holiday");
 const { sendNotificationToRoles } = require("../utils/notificationHelper");
 
 // ===============================================
