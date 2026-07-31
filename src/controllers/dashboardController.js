@@ -601,6 +601,15 @@ exports.getProjectManagerDashboard = async (req, res) => {
 user: task.assignedTo ? task.assignedTo.fullName || "N/A" : "N/A",
   updatedAt: task.updatedAt,
 }));
+
+const announcements = await Announcement.find({
+      companyId,
+      status: "active",
+    })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .lean();
+      
     res.status(200).json({
       success: true,
       data: {
@@ -633,6 +642,12 @@ user: task.assignedTo ? task.assignedTo.fullName || "N/A" : "N/A",
           date: project.dueDate,
           desc: project.description || "",
         })),
+
+        announcements: announcements.map((item) => ({
+          title: item.title,
+          description: item.description,
+          date: item.createdAt,
+        }))
       },
     });
   } catch (error) {
