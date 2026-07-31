@@ -76,15 +76,24 @@ const generatePayslip = async ({
 
     const today = new Date();
 
+    // const fileName =
+    //   employee.fullName.replace(/\s+/g, "_") +
+    //   "_" +
+    //   String(today.getDate()).padStart(2, "0") +
+    //   "_" +
+    //   String(today.getMonth() + 1).padStart(2, "0") +
+    //   "_" +
+    //   today.getFullYear() +
+    //   ".pdf";
+
+    const monthName = today.toLocaleString("en-US", {
+      month: "long",
+    });
+
+    const year = today.getFullYear();
+
     const fileName =
-      employee.fullName.replace(/\s+/g, "_") +
-      "_" +
-      String(today.getDate()).padStart(2, "0") +
-      "_" +
-      String(today.getMonth() + 1).padStart(2, "0") +
-      "_" +
-      today.getFullYear() +
-      ".pdf";
+      `${employee.fullName.trim().replace(/\s+/g, "_")}_${monthName}_${year}.pdf`;
 
     const filePath = path.join(folderPath, fileName);
 
