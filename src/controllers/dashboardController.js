@@ -3,6 +3,7 @@ const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const Task = require("../models/Task");
 const Announcement = require("../models/announcementsModel");
+const AttendanceRequest = require("../models/attendanceRequest");
 const Onboarding = require("../models/Onboarding");
 const JobPost = require("../models/JobPost");
 const Candidate = require("../models/Candidate");
@@ -94,6 +95,12 @@ const recentEmployees = await Employee.find({
       },
     });
 
+    // get attendance request status pending count
+    const attendanceRequests = await AttendanceRequest.countDocuments({
+      companyId,
+      status: "pending",
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -158,6 +165,7 @@ const recentEmployees = await Employee.find({
         pendingApprovals: {
           leaveRequests: pendingLeaveRequests,
           onboardingApprovals,
+          attendanceCorrections: attendanceRequests,
         },
 
         recruitmentDashboard: {
