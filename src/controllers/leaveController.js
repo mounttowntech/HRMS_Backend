@@ -467,12 +467,16 @@ exports.getLeaves = async (req, res) => {
       filter.employeeId = { $ne: req.user.employeeId };
     }
 
+    // need to get also approved hr and manager name 
     const leaves = await Leave.find(filter)
       .populate(
         "employeeId",
         "fullName employeeCode email departmentId designationId"
-      )
+      ).populate("managerApproval.approvedBy", "fullName email").populate("hrApproval.approvedBy", "fullName email")
+      .populate("adminApproval.approvedBy", "name email")
       .sort({ createdAt: -1 });
+
+      // console.log("GET LEAVES RESULT:", leaves);
 
     res.status(200).json({
       success: true,
@@ -510,7 +514,8 @@ exports.getMyLeaves = async (req, res) => {
       .populate(
         "employeeId",
         "fullName employeeCode email departmentId designationId"
-      )
+      ).populate("managerApproval.approvedBy", "fullName email").populate("hrApproval.approvedBy", "fullName email")
+      .populate("adminApproval.approvedBy", "name email")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -529,7 +534,8 @@ exports.updateLeave = async (req, res) => {
   try {
     const loggedInUserId = getUserId(req);
     const role = req.user.role;
-
+// console.log("req_user", req.user);
+// console.log("loggedInUserId", loggedInUserId);
     const leave = await Leave.findOne({
       _id: req.params.id,
       companyId: req.user.companyId,
@@ -641,6 +647,18 @@ exports.updateLeave = async (req, res) => {
         leave.status = status === "approved" ? "approved" : "rejected";
       }
 
+      if (role === "admin") {
+        leave.adminApproval = {
+          status,
+          approvedBy: loggedEmployee?._id || req?.user?.id || null,
+          remarks: remarks || "",
+        };
+
+        leave.status = status === "approved" ? "approved" : "rejected";
+      }
+      
+
+// console.log("Updated leave object:", leave);
       await leave.save();
 
       const emp = await Employee.findById(leave.employeeId);

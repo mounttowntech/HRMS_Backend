@@ -93,6 +93,19 @@ const schema = new mongoose.Schema(
       },
       remarks: String,
     },
+
+    adminApproval: {
+      approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+      status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending",
+      },
+      remarks: String,
+    },
   },
   { timestamps: true }
 );
