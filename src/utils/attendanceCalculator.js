@@ -1,6 +1,7 @@
 const DEFAULT_BREAK_MINUTES = 60;
 const FULL_DAY_MINUTES = 480; // 8 Hours
 const HALF_DAY_MINUTES = 240; // 4 Hours
+const BREAK_ELIGIBLE_MINUTES = 360; // 6 hours
 
 /* ==========================================================
    Minutes Difference
@@ -76,6 +77,16 @@ exports.calculateAttendance = (attendance) => {
       attendance.punchIn,
       attendance.punchOut
     );
+
+    let breakMinutes = actualBreakMinutes;
+
+    // Apply default break only for employees
+    // who worked a full-day duration.
+    if (totalMinutes >= BREAK_ELIGIBLE_MINUTES && actualBreakMinutes === 0) {
+      breakMinutes = DEFAULT_BREAK_MINUTES;
+    }
+
+    attendance.totalBreakMinutes = breakMinutes;
 
     attendance.workingMinutes = Math.max(
       0,

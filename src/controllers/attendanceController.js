@@ -2299,6 +2299,10 @@ exports.getAttendanceCalendarView = async (req, res) => {
 
               workingMinutes: attendance.workingMinutes,
 
+              defaultBreakMinutes: process.env.DEFAULT_BREAK_MINUTES
+                ? Number(process.env.DEFAULT_BREAK_MINUTES)
+                : 60,
+
               totalBreakMinutes: attendance.totalBreakMinutes,
 
               status: attendance.status,
