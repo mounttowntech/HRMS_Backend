@@ -202,7 +202,10 @@ exports.getAttendanceRequests = async (req, res) => {
         return acc.concat(project.teamMembers);
       }, []);
 
-      filter.employeeId = { $in: teamMemberIds , $nin: [employee._id] };
+      filter.employeeId = { 
+        $in: teamMemberIds , 
+        // $nin: [employee._id] 
+      };
 
     }else if(req.user.role === "projectmanager"){
       const projectManagerProjects = await Project.find({
@@ -214,7 +217,10 @@ console.log("projectManagerProjects:", projectManagerProjects);
         return acc.concat(project.teamMembers);
       }, []);
 
-      filter.employeeId = { $in: teamMemberIds, $nin: [employee._id] };
+      filter.employeeId = { 
+        $in: teamMemberIds, 
+        // $nin: [employee._id] 
+      };
 
     }
 
@@ -238,7 +244,7 @@ console.log("projectManagerProjects:", projectManagerProjects);
 console.log("filter:", filter);
     const requests = await AttendanceRequest.find(filter)
       .populate("employeeId", "fullName employeeCode email")
-      .populate("approvedBy", "userName email role")
+      .populate("approvedBy", "name email role")
       .sort({ createdAt: -1 });
 
     res.status(200).json({
@@ -322,7 +328,6 @@ exports.updateAttendanceRequestStatus = async (req, res) => {
 
     request.status = status;
     request.remarks = remarks || "";
-    request.approvedBy = getUserId(req);
     request.requestType = requestType || null;
     request.attendanceDate = attendanceDate || null;
     request.breakIn = breakIn || null;
@@ -418,7 +423,8 @@ console.log("Updated request:", request);
 
     if (status === "approved") {
       const dateStart = new Date(`${request.attendanceDate}T00:00:00+05:30`);
-
+      request.approvedBy = getUserId(req);
+      
       let attendance = await Attendance.findOne({
         companyId: req.user.companyId,
         employeeId: request.employeeId._id,
@@ -524,6 +530,8 @@ console.log("Updated request:", request);
         }
       });
 
+      
+
       // ==============================
       // Recalculate Attendance
       // ==============================
@@ -593,6 +601,35 @@ exports.getAttendanceDataByDate = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve attendance data",
+      error: error.message,
+    });
+  }
+};
+
+//delete attendance request
+exports.deleteAttendanceRequest = async (req, res) => {
+  try {
+    const request = await AttendanceRequest.findOneAndDelete({
+      _id: req.params.id,
+      companyId: req.user.companyId,
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Attendance request not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Attendance request deleted successfully",
+      data: request,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete attendance request",
       error: error.message,
     });
   }

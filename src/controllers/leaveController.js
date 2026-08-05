@@ -458,14 +458,14 @@ exports.getLeaves = async (req, res) => {
 
       filter.employeeId = {
         $in: teamProjects.flatMap((project) => project.teamMembers),
-        $ne: manager._id, // Exclude the manager's own leaves
+        // $ne: manager._id, // Exclude the manager's own leaves
       };
     }
 
     //exclude login user leaves if role is hr,projectmanager and teamlead
-    if (role === "hr") {
-      filter.employeeId = { $ne: req.user.employeeId };
-    }
+    // if (role === "hr") {
+    //   filter.employeeId = { $ne: req.user.employeeId };
+    // }
 
     // need to get also approved hr and manager name 
     const leaves = await Leave.find(filter)

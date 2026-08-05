@@ -505,6 +505,7 @@ exports.updatePermission = async (req, res) => {
       reason,
       department,
       designation,
+      approvalStatus
     } = req.body;
 
     const permission = await Permission.findOne({
@@ -581,6 +582,11 @@ exports.updatePermission = async (req, res) => {
       validation.remainingHours - totalHours;
 
     permission.updatedBy = req.user.id || req.user.userId;
+
+    if( approvalStatus && ["Pending", "Approved", "Rejected"].includes(approvalStatus)) {
+      permission.approvalStatus = approvalStatus;
+      permission.approvedBy = req.user.id || req.user.userId;
+    }
 
     await permission.save();
 

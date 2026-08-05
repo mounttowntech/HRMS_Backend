@@ -24,7 +24,7 @@ router.get(
 router.get(
   "/",
   verifyToken,
-  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager"),
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager", "employee"),
   c.getAttendanceRequests
 );
 
@@ -41,6 +41,14 @@ router.get(
   verifyToken,
   allowRoles("hr", "employer", "teamlead", "projectmanager", "employee"),
   c.getAttendanceDataByDate
+);
+
+//delete attendance request
+router.delete(
+  "/:id",
+  verifyToken,
+  allowRoles("hr", "admin", "employer", "teamlead", "projectmanager", "employee"),
+  c.deleteAttendanceRequest
 );
 
 module.exports = router;
