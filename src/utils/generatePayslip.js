@@ -86,11 +86,10 @@ const generatePayslip = async ({
     //   today.getFullYear() +
     //   ".pdf";
 
-    const monthName = today.toLocaleString("en-US", {
-      month: "long",
-    });
 
-    const year = today.getFullYear();
+    year = year || today.getFullYear();
+
+    monthName = monthName || String(today.getMonth() + 1).padStart(2, "0");
 
     const fileName =
       `${employee.fullName.trim().replace(/\s+/g, "_")}_${monthName}_${year}.pdf`;
@@ -436,15 +435,15 @@ const generatePayslip = async ({
       [
         "Medical Allowance",
         payrollData.medicalAllowance,
-        "",
-        "",
+        "Employer PF Contribution",
+        payrollData.employerPFContribution,
       ],
 
       [
         "Conveyance Allowance",
         payrollData.conveyanceAllowance,
-        "",
-        "",
+        "Employer ESI Contribution",
+        payrollData.employerESIContribution,
       ],
 
       [

@@ -6,6 +6,11 @@ const Attendance = require("../models/Attendance");
 const Leave = require("../models/Leave");
 const Holiday = require("../models/holiday");
 const Payroll = require("../models/Payroll");
+const Shift = require("../models/shiftModel");
+const PayslipCalculation = require("../models/PayslipCalculation");
+
+// const FULL_DAY_MINUTES = 480; // 8 Hours
+// const HALF_DAY_MINUTES = 240; // 4 Hours
 
 const {
   getMonthRangeByMonthYear,
@@ -15,7 +20,7 @@ const generatePayslip = require("../utils/generatePayslip");
 const sendEmail = require("../utils/sendMail");
 
 const roundAmount = (amount) => {
-  return Number((amount || 0).toFixed(2));
+  return Number((Math.round(amount || 0) * 100) / 100).toFixed(2);
 };
 const getWeekOffCount = (start, end, weekOff = []) => {
   let count = 0;
@@ -40,6 +45,22 @@ const getPayslipFilePath = (payslipUrl) => {
   const cleanPath = payslipUrl.replace(/^\/+/, "");
   return path.join(__dirname, "..", cleanPath);
 };
+
+function getShiftWorkingMinutes(startTime, endTime) {
+  const [startHour, startMinute] = startTime.split(":").map(Number);
+  const [endHour, endMinute] = endTime.split(":").map(Number);
+
+  let start = startHour * 60 + startMinute;
+  let end = endHour * 60 + endMinute;
+
+  // Night shift crosses midnight
+  if (end < start) {
+    end += 24 * 60;
+  }
+
+  return end - start;
+}
+
 
 // PROCESS PAYROLL
 exports.processPayroll = async (req, res) => {
@@ -80,12 +101,18 @@ exports.processPayroll = async (req, res) => {
       month: "long",
     });
 
+    //get all shift details for all employees in the company
+    const shifts = await Shift.find({ companyId });
+
+    //get payslip calculation details for all employees in the company
+    const payslipDetails = await PayslipCalculation.find({ companyId });
+// console.log("payslipDetails:", payslipDetails);
     const employees = await Employee.find({
       companyId,
       status: "active",
     })
       .populate("designationId", "name")
-      .populate("shiftId")
+      .populate("shiftId", "_id shiftName shiftType weekOff startTime endTime workingHours")
       .lean();
 
     let payrollEmployees = [];
@@ -95,20 +122,65 @@ exports.processPayroll = async (req, res) => {
     let netPayroll = 0;
 
     for (const employee of employees) {
+      //get payslip calculation details for the employee
+      const payslipCalculation = payslipDetails.find(
+        (p) =>
+          p.shiftId?.toString() === employee?.shiftId?._id?.toString()
+      );
+
+      if (!payslipCalculation) {
+        throw new Error(
+          `Payslip calculation not found for shift ${employee.shiftId?.shiftName}`
+        );
+      }
+
+      // Prefer shift working hours
+const FULL_DAY_MINUTES = getShiftWorkingMinutes(
+  employee.shiftId?.startTime,
+  employee.shiftId?.endTime
+) || 480; // Default to 8 hours if not defined
+
+const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
+
       //===================================
       // PRESENT DAYS
       //===================================
 
-      const presentDays =
-        await Attendance.countDocuments({
-          companyId,
-          employeeId: employee._id,
-          status: "present",
-          date: {
-            $gte: start,
-            $lte: end,
-          },
-        });
+      // const presentDays =
+      //   await Attendance.countDocuments({
+      //     companyId,
+      //     employeeId: employee._id,
+      //     status: "present",
+      //     date: {
+      //       $gte: start,
+      //       $lte: end,
+      //     },
+      //   });
+
+      const attendances = await Attendance.find({
+        companyId,
+        employeeId: employee._id,
+        date: {
+          $gte: start,
+          $lte: end,
+        },
+      }).select("workingMinutes status");
+
+      let payablePresentDays = 0;
+
+      for (const attendance of attendances) {
+
+        if (attendance.status === "holiday") continue;
+        if (attendance.status === "weekoff") continue;
+
+        const minutes = attendance.workingMinutes || 0;
+
+        if (minutes >= FULL_DAY_MINUTES) {
+          payablePresentDays += 1;
+        } else if (minutes >= HALF_DAY_MINUTES) {
+          payablePresentDays += 0.5;
+        }
+      }
 
       //===================================
       // PAID LEAVE DAYS
@@ -173,24 +245,23 @@ exports.processPayroll = async (req, res) => {
       // TOTAL DAYS
       //===================================
 
-      const totalDays =
-        new Date(year, month, 0).getDate();
+      // const totalDays =  new Date(year, month, 0).getDate();
+
+        const totalWorkingDays =  Number(payslipCalculation.totalWorkingDaysPerMonth);
 
       //===================================
       // PAID DAYS
       //===================================
 
-      const paidDays =
-        presentDays +
-        paidLeaves +
-        holidayCount +
-        weekOffCount;
+      // const paidDays =
+      //   presentDays +
+      //   paidLeaves +
+      //   holidayCount +
+      //   weekOffCount;
 
-      const absentDays =
-        Math.max(
-          0,
-          totalDays - paidDays
-        );
+      const paidDays = payablePresentDays + paidLeaves + holidayCount + weekOffCount;
+
+      const absentDays =  Math.max(0, totalWorkingDays - paidDays);
 
       //===================================
       // SALARY
@@ -200,7 +271,7 @@ exports.processPayroll = async (req, res) => {
         Number(employee.salary || 0);
 
       const perDaySalary =
-        monthlySalary / totalDays;
+        monthlySalary / totalWorkingDays;
 
       const earnedSalary =
         perDaySalary * paidDays;
@@ -209,60 +280,133 @@ exports.processPayroll = async (req, res) => {
       // EARNINGS
       //===================================
 
+      // const basicSalary =
+      //   earnedSalary * 0.50;
+
+      // const hra =
+      //   basicSalary * 0.40;
+
+      // const medicalAllowance =
+      //   earnedSalary * 0.10;
+
+      // const conveyanceAllowance =
+      //   earnedSalary * 0.10;
+
+      // const shiftAllowance =
+      //   employee.shiftId?.shiftType ===
+      //   "night"
+      //     ? earnedSalary * 0.10
+      //     : earnedSalary * 0.05;
+
       const basicSalary =
-        earnedSalary * 0.50;
+  earnedSalary *
+  ((payslipCalculation.basicPercentage || 50) / 100);
 
-      const hra =
-        basicSalary * 0.40;
+const hra =
+  basicSalary *
+  ((payslipCalculation.hraPercentage || 40) / 100);
 
-      const medicalAllowance =
-        earnedSalary * 0.10;
+// Prorated fixed allowances
+const ratio =
+  paidDays / totalWorkingDays;
 
-      const conveyanceAllowance =
-        earnedSalary * 0.10;
+  // the travel allownce only for moring shift not for night shift
 
-      const shiftAllowance =
-        employee.shiftId?.shiftType ===
-        "night"
-          ? earnedSalary * 0.10
-          : earnedSalary * 0.05;
+const travelAllowance =
+  employee.shiftId?.shiftType === "general"
+    ? (1000/totalWorkingDays) * paidDays
+    : 0;
+
+const medicalAllowance =
+  (500/totalWorkingDays) * paidDays;
+
+const conveyanceAllowance = (500/totalWorkingDays) * paidDays;
+
+const shiftAllowance =
+  (payslipCalculation.nightShiftAllowance || 0) * ratio;
+
+
+
+      // const otherAllowance =
+      //   Math.max(
+      //     0,
+      //     earnedSalary -
+      //       (
+      //         basicSalary +
+      //         hra +
+      //         medicalAllowance +
+      //         conveyanceAllowance +
+      //         shiftAllowance
+      //       )
+      //   );
 
       const otherAllowance =
-        Math.max(
-          0,
-          earnedSalary -
-            (
-              basicSalary +
-              hra +
-              medicalAllowance +
-              conveyanceAllowance +
-              shiftAllowance
-            )
-        );
-
-      const grossEarning =
+  Math.max(
+    0,
+    earnedSalary -
+      (
         basicSalary +
         hra +
+        travelAllowance +
         medicalAllowance +
         conveyanceAllowance +
-        shiftAllowance +
-        otherAllowance;
+        shiftAllowance
+      )
+  );
+
+      // const grossEarning =
+      //   basicSalary +
+      //   hra +
+      //   medicalAllowance +
+      //   conveyanceAllowance +
+      //   shiftAllowance +
+      //   otherAllowance;
+
+
+        const grossEarning =
+  basicSalary +
+  hra +
+  travelAllowance +
+  medicalAllowance +
+  conveyanceAllowance +
+  shiftAllowance +
+  otherAllowance;
 
       //===================================
       // DEDUCTIONS
       //===================================
 
-      const pfDeduction =
-        basicSalary * 0.12;
+      // const pfDeduction =
+      //   basicSalary * 0.12;
 
-      const esiDeduction =
-        grossEarning <= 21000
-          ? grossEarning * 0.0075
-          : 0;
+      // const esiDeduction =
+      //   grossEarning <= 21000
+      //     ? grossEarning * 0.0075
+      //     : 0;
+
+      const pfDeduction =
+  basicSalary *
+  ((payslipCalculation.employeePFPercentage || 12) / 100);
+
+  const employerPFContribution =
+  basicSalary *
+  ((payslipCalculation.employerPFPercentage || 12) / 100);
+
+const esiDeduction =
+  grossEarning <= 21000
+    ? grossEarning *
+      ((payslipCalculation.employeeESIPercentage || 0.75) / 100)
+    : 0;
+
+    const employerESIContribution =
+  grossEarning <= 21000
+    ? grossEarning *
+      ((payslipCalculation.employerESIPercentage || 0.75) / 100)
+    : 0;
 
       const totalDeduction =
         pfDeduction +
-        esiDeduction;
+        esiDeduction + employerPFContribution + employerESIContribution;
 
       const netSalary =
         grossEarning -
@@ -273,9 +417,9 @@ exports.processPayroll = async (req, res) => {
       //===================================
 
       const payrollData = {
-        totalWorkingDays: totalDays,
+        totalWorkingDays,
 
-        presentDays,
+        payablePresentDays,
 
         paidLeaveDays: paidLeaves,
 
@@ -289,6 +433,12 @@ exports.processPayroll = async (req, res) => {
 
         monthlySalary:
           roundAmount(monthlySalary),
+
+        earnedSalary:
+          roundAmount(earnedSalary),
+
+        travelAllowance:
+          roundAmount(travelAllowance),
 
         perDaySalary:
           roundAmount(perDaySalary),
@@ -337,9 +487,19 @@ exports.processPayroll = async (req, res) => {
             pfDeduction
           ),
 
+        employerPFContribution:
+          roundAmount(
+            employerPFContribution
+          ),
+
         esiDeduction:
           roundAmount(
             esiDeduction
+          ),
+
+        employerESIContribution:
+          roundAmount(
+            employerESIContribution
           ),
 
         totalDeduction:
