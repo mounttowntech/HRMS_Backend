@@ -164,7 +164,7 @@ const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
           $gte: start,
           $lte: end,
         },
-      }).select("workingMinutes status");
+      }).select("workingMinutes status permissionMinutes permissionApproved").lean();
 
       let payablePresentDays = 0;
 
@@ -173,7 +173,11 @@ const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
         if (attendance.status === "holiday") continue;
         if (attendance.status === "weekoff") continue;
 
-        const minutes = attendance.workingMinutes || 0;
+        let minutes = attendance.workingMinutes || 0;
+        if(attendance.permissionApproved) {
+          const permissionMinutes = attendance.permissionMinutes || 0;
+          minutes += permissionMinutes;
+        }
 
         if (minutes >= FULL_DAY_MINUTES) {
           payablePresentDays += 1;

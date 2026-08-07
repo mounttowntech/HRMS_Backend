@@ -73,10 +73,14 @@ exports.calculateAttendance = (attendance) => {
   attendance.overtimeMinutes = 0;
 
   if (attendance.punchIn && attendance.punchOut) {
-    const totalMinutes = exports.minutesDiff(
+    let totalMinutes = exports.minutesDiff(
       attendance.punchIn,
       attendance.punchOut
     );
+
+    if(attendance?.permissionApproved && attendance?.permissionMinutes) {
+      totalMinutes += attendance.permissionMinutes;
+    }
 
     let breakMinutes = actualBreakMinutes;
 
@@ -200,6 +204,67 @@ exports.calculateEarlyLeavingMinutes = (
 
   return earlyMinutes > 0 ? earlyMinutes : 0;
 };
+
+exports.calculateAttendanceStatus = (attendance) => {
+
+  // const FULL_DAY_MINUTES = 480;
+  // const HALF_DAY_MINUTES = 240;
+
+  // Employee hasn't checked out yet
+    if (!attendance.punchOut) {
+        return attendance;
+    }
+
+    let actualBreakMinutes = 0;
+
+  let minutes =
+    attendance.effectiveMinutes ||
+    attendance.workingMinutes ||
+    0;
+
+    //  break reduce in minutes if permission is approved and has permission minutes
+    // if (attendance.permissionApproved && attendance.permissionMinutes) {
+    //   if(attendance.breaks && attendance.breaks.length > 0) {
+    //     attendance.breaks.forEach((item) => {
+    //       if (item.minutes && item.minutes > 0) {
+    //         actualBreakMinutes += item.minutes;
+    //       } else if (item.breakIn && item.breakOut) {
+    //          actualBreakMinutes += exports.minutesDiff(
+    //           item.breakIn,
+    //           item.breakOut
+    //         );
+    //       }
+    //     });
+    //   }
+    // }
+
+  //need to reduce the break minutes from the total minutes if permission is approved and has permission minutes
+  // if (attendance.permissionApproved && attendance.permissionMinutes) {
+  //   minutes -= actualBreakMinutes;
+  // }
+
+  // console.log("minutes:", minutes, "actualBreakMinutes:", actualBreakMinutes, "permissionApproved:", attendance.permissionApproved, "permissionMinutes:", attendance.permissionMinutes);
+  if (minutes >= FULL_DAY_MINUTES) {
+
+    attendance.status = "present";
+    attendance.session = "full_day";
+    attendance.payableDay = 1;
+
+  } else if (minutes >= HALF_DAY_MINUTES) {
+
+    attendance.status = "half_day";
+    attendance.session = "half_day";
+    attendance.payableDay = 0.5;
+
+  } else {
+
+    attendance.status = "absent";
+    attendance.session = "absent";
+    attendance.payableDay = 0;
+  }
+
+  return attendance;
+}
 
 /* ==========================================================
    Constants

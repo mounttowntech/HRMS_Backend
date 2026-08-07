@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const Permission = require("../models/permissionModel");
 const Employee = require("../models/Employee");
 const Project = require("../models/Project");
+const attendanceModel = require("../models/Attendance");
+const calculateAttendanceStatus = require("../utils/attendanceCalculator").calculateAttendanceStatus;
 
 const {
   MONTHLY_LIMIT,
@@ -493,6 +495,20 @@ exports.getEmployeeMonthlySummary = async (req, res) => {
   }
 };
 
+// convert minutes from fromTime and toTime to hours and minutes, then calculate the difference in hours.
+const calculatePermissionTotalMinutes = (fromTime, toTime) => {
+  const [fromHours, fromMinutes] = fromTime.split(":").map(Number);
+  const [toHours, toMinutes] = toTime.split(":").map(Number);
+
+  const fromTotalMinutes = fromHours * 60 + fromMinutes;
+  const toTotalMinutes = toHours * 60 + toMinutes;
+
+  const differenceInMinutes = toTotalMinutes - fromTotalMinutes;
+  const differenceInHours = differenceInMinutes / 60;
+
+  return differenceInHours;
+};
+
 exports.updatePermission = async (req, res) => {
   try {
     const companyId = req.user.companyId;
@@ -583,12 +599,83 @@ exports.updatePermission = async (req, res) => {
 
     permission.updatedBy = req.user.id || req.user.userId;
 
-    if( approvalStatus && ["Pending", "Approved", "Rejected"].includes(approvalStatus)) {
+  //   if( approvalStatus && ["Pending", "Approved", "Rejected"].includes(approvalStatus)) {
+
+  //     if (approvalStatus == "Approved") {
+        
+  //       let totalPermissionMinutes = permission.totalHours * 60;
+  //       console.log("Total Permission Minutes:", totalPermissionMinutes);
+  //       const attendanceDate = permission.permissionDate
+  //         .toISOString()
+  //         .split("T")[0];
+  //       let attendanceRecord = await attendanceModel.findOne({
+  //         companyId,
+  //         employeeId: permission.employee,
+  //         attendanceDate,
+  //       });
+  //       console.log("Attendance Record Found:", attendanceRecord);
+  //       if (attendanceRecord) {
+  //         attendance.effectiveMinutes =
+  // (attendance.workingMinutes || 0) +
+  // (attendance.permissionMinutes ?? totalPermissionMinutes || 0);
+  //         attendanceRecord.permissionMinutes = totalPermissionMinutes;
+  //         attendanceRecord.permissionApproved = true;
+  //         attendanceRecord = await calculateAttendanceStatus(attendanceRecord);
+
+  //         await attendanceRecord.save();
+  //       }
+  //     }
+
+  //     permission.approvalStatus = approvalStatus;
+  //     permission.approvedBy = req.user.id || req.user.userId;
+  //   }
+
+  //   await permission.save();
+
+    if (approvalStatus && ["Pending", "Approved", "Rejected"].includes(approvalStatus) ) {
+      // Update permission first
       permission.approvalStatus = approvalStatus;
       permission.approvedBy = req.user.id || req.user.userId;
-    }
 
-    await permission.save();
+      await permission.save();
+
+      // Update attendance only when approved
+      if (approvalStatus === "Approved") {
+        const totalPermissionMinutes = permission.totalHours * 60;
+
+        const attendanceDate = permission.permissionDate
+          .toISOString()
+          .split("T")[0];
+
+        let attendanceRecord = await attendanceModel.findOne({
+          companyId,
+          employeeId: permission.employee,
+          attendanceDate,
+        });
+
+        // console.log("Attendance Record Found:", attendanceRecord);
+
+        // Attendance exists (Past / Current Date)
+        if (attendanceRecord) {
+          attendanceRecord.permissionMinutes = totalPermissionMinutes;
+          attendanceRecord.permissionApproved = true;
+
+          // Calculate effective minutes
+          attendanceRecord.effectiveMinutes =
+            (attendanceRecord.workingMinutes || 0) +
+            (attendanceRecord.permissionMinutes || 0);
+
+          // Recalculate attendance status/session/payable day
+          attendanceRecord = await calculateAttendanceStatus(
+            attendanceRecord
+          );
+
+          await attendanceRecord.save();
+        }
+        // Future date: attendance not created yet
+        // No action required here.
+      }
+    }
 
     return res.status(200).json({
       success: true,

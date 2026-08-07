@@ -3,7 +3,7 @@ const Employee = require("../models/Employee");
 const User = require("../models/User");
 const Leave = require("../models/Leave");
 const bcrypt = require("bcryptjs");
-const PermissionRequest = require("../models/permissionRequest");
+const Permission = require("../models/permissionModel");
 const calculateLateMinutesByShift = require("../utils/shiftAttendanceDate").calculateLateMinutesByShift;
 
 const {
@@ -1232,7 +1232,7 @@ exports.getAttendance = async (req, res) => {
 
     let permissionFilter = {
       companyId,
-      status: "approved",
+      approvalStatus: "Approved",
     };
 
     if (isReportFilter) {
@@ -1281,8 +1281,8 @@ exports.getAttendance = async (req, res) => {
 
     const attendanceRecords = await Attendance.find(attendanceFilter).lean();
     const leaveRecords = await Leave.find(leaveFilter).lean();
-    const permissionRecords = await PermissionRequest.find(permissionFilter).lean();
-
+    const permissionRecords = await Permission.find(permissionFilter).lean();
+// console.log("permissionRecords:", permissionRecords);
     const attendanceMap = {};
     attendanceRecords.forEach((item) => {
       const key = `${item.employeeId}_${item.attendanceDate}`;
@@ -1306,7 +1306,7 @@ exports.getAttendance = async (req, res) => {
 
     const permissionMap = {};
     permissionRecords.forEach((item) => {
-      permissionMap[item.employeeId.toString()] = item;
+      permissionMap[item.employee.toString()] = item;
     });
 
     // const dateList = [];
@@ -1415,6 +1415,7 @@ exports.getAttendance = async (req, res) => {
                 toTime: permission.toTime,
                 minutes: permission.minutes,
                 reason: permission.reason,
+                totalHours: permission.totalHours,
               }
             : null,
 
@@ -1511,10 +1512,10 @@ exports.getMonthlyAttendanceSalaryReport = async (req, res) => {
         toDate: { $gte: start },
       });
 
-      const permissions = await PermissionRequest.find({
+      const permissions = await Permission.find({
         companyId,
-        employeeId: emp._id,
-        status: "approved",
+        employee: emp._id,
+        approvalStatus: "Approved",
         permissionDate: { $gte: start, $lte: end },
       }).lean();
 
@@ -2308,7 +2309,9 @@ exports.getAttendanceCalendarView = async (req, res) => {
               status: attendance.status,
               breaks: attendance.breaks || [],
               punchInDevice: attendance.punchInDevice || null,
-              punchOutDevice: attendance.punchOutDevice || null
+              punchOutDevice: attendance.punchOutDevice || null,
+              permissionApproved: attendance.permissionApproved || false,
+              permissionMinutes: attendance.permissionMinutes || 0,
 
             }
 

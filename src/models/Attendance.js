@@ -116,6 +116,16 @@ const attendanceSchema = new mongoose.Schema(
       default: "employee_login",
     },
 
+    permissionMinutes: {
+      type: Number,
+      default: 0,
+    },
+
+    permissionApproved: {
+      type: Boolean,
+      default: false,
+    },
+
     punchInDevice: deviceInfoSchema,
     punchOutDevice: deviceInfoSchema,
   },
