@@ -583,7 +583,7 @@ exports.getAttendanceDataByDate = async (req, res) => {
     const filter = {
       companyId: req.user.companyId,
       attendanceDate: date,
-      employeeId: req.user?.employeeId || null,
+      // employeeId: req.user?.employeeId || null,
     };
     const attendanceData = await Attendance.findOne(filter);
     if (!attendanceData || attendanceData.length === 0) {
