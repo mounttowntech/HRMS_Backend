@@ -579,11 +579,13 @@ console.log("Updated request:", request);
 //get attendance data use by attendance date
 exports.getAttendanceDataByDate = async (req, res) => {
   try {
+    // console.log("req.params:", req.query, req.params);
     const { date } = req.params;
+    const { employeeId } = req.query;
     const filter = {
       companyId: req.user.companyId,
       attendanceDate: date,
-      // employeeId: req.user?.employeeId || null,
+      employeeId: employeeId || req.user?.employeeId || null,
     };
     const attendanceData = await Attendance.findOne(filter);
     if (!attendanceData || attendanceData.length === 0) {
