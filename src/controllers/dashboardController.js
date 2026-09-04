@@ -38,22 +38,47 @@ const recentEmployees = await Employee.find({
   .sort({ createdAt: -1 }) // latest employees first
   .limit(5)
   .lean();
+console.log("Present date:", start, end);
+console.log("companyId :", companyId);
+// get today and leave attendance employee count
+    const now = new Date();
 
-    const presentToday = await Attendance.countDocuments({
-      companyId,
-      date: { $gte: start, $lte: end },
-      status: "present",
-    });
+const startOfToday = new Date(now);
+startOfToday.setHours(0, 0, 0, 0);
 
-    const totalLeaves = await Leave.countDocuments({
-      companyId,
-      status: "approved",
-      fromDate: { $lte: end },
-      toDate: { $gte: start },
-    });
+const endOfToday = new Date(now);
+endOfToday.setHours(23, 59, 59, 999);
+
+// ================================
+// PRESENT TODAY
+// ================================
+
+const presentToday = await Attendance.countDocuments({
+  companyId,
+  date: {
+    $gte: startOfToday,
+    $lte: endOfToday,
+  },
+  status: "present",
+});
+
+console.log("Present Today:", presentToday);
+
+// ================================
+// ON LEAVE TODAY
+// ================================
+
+const onLeaveToday = await Leave.countDocuments({
+  companyId,
+  status: "approved",
+  fromDate: { $lte: endOfToday },
+  toDate: { $gte: startOfToday },
+});
+
+console.log("On Leave Today:", onLeaveToday);
 
     const absentTodayRaw =
-      totalEmployees - presentToday - totalLeaves;
+      totalEmployees - presentToday - onLeaveToday;
 
     const absentToday =
       absentTodayRaw < 0 ? 0 : absentTodayRaw;
@@ -120,9 +145,9 @@ const recentEmployees = await Employee.find({
             label: "Present Today",
           },
 
-          totalLeaves: {
-            count: totalLeaves,
-            label: "This Month",
+          onLeaveToday: {
+            count: onLeaveToday,
+            label: "On Leave Today",
           },
 
           absentToday: {
@@ -146,9 +171,9 @@ const recentEmployees = await Employee.find({
           },
 
           onLeave: {
-            count: totalLeaves,
+            count: onLeaveToday,
             percentage: percentage(
-              totalLeaves,
+              onLeaveToday,
               totalEmployees
             ),
           },
