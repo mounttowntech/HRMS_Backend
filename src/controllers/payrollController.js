@@ -1,5 +1,7 @@
-const path = require("path");
+const archiver = require("archiver");
+
 const fs = require("fs");
+const path = require("path");
 
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
@@ -8,6 +10,7 @@ const Holiday = require("../models/holiday");
 const Payroll = require("../models/Payroll");
 const Shift = require("../models/shiftModel");
 const PayslipCalculation = require("../models/PayslipCalculation");
+
 
 // const FULL_DAY_MINUTES = 480; // 8 Hours
 // const HALF_DAY_MINUTES = 240; // 4 Hours
@@ -1094,5 +1097,275 @@ exports.deletePayroll = async (req, res) => {
       message: "Failed to delete payroll",
       error: error.message,
     });
+  }
+};
+
+
+
+exports.downloadBulkPayslips = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+console.log("downloadBulkPayslips called with month:", month, "year:", year);
+    if (!month || !year) {
+      return res.status(400).json({
+        success: false,
+        message: "Month and year are required",
+      });
+    }
+
+    const monthNumber = Number(month);
+    const yearNumber = Number(year);
+console.log("monthNumber:", monthNumber, "yearNumber:", yearNumber);
+    if (
+      Number.isNaN(monthNumber) ||
+      Number.isNaN(yearNumber) ||
+      monthNumber < 1 ||
+      monthNumber > 12
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid month or year",
+      });
+    }
+
+    // ==========================================
+    // FIND PAYROLLS FOR SELECTED PERIOD
+    // ==========================================
+
+    const payrolls = await Payroll.find({
+  month: monthNumber,
+  year: yearNumber,
+  "employees.payslipUrl": { $exists: true, $ne: "" },
+}).sort({ createdAt: 1 });
+
+console.log("Found payrolls:", payrolls.length);
+
+if (!payrolls.length) {
+  return res.status(404).json({
+    success: false,
+    message: "No payslips found for the selected period",
+  });
+}
+
+// Get all employees having payslips
+const payslips = [];
+
+payrolls.forEach((payroll) => {
+  payroll.employees.forEach((employee) => {
+    if (employee.payslipUrl) {
+      payslips.push({
+        employeeId: employee.employeeId,
+        employeeCode: employee.employeeCode,
+        employeeName: employee.employeeName,
+        payslipUrl: employee.payslipUrl,
+        payrollId: payroll._id,
+      });
+    }
+  });
+});
+
+console.log("Found payslips:", payslips.length);
+
+if (!payslips.length) {
+  return res.status(404).json({
+    success: false,
+    message: "No payslips found for the selected period",
+  });
+}
+
+    // ==========================================
+    // ZIP FILE NAME
+    // ==========================================
+
+    const monthName = new Date(
+      yearNumber,
+      monthNumber - 1,
+      1
+    ).toLocaleString("en-US", {
+      month: "long",
+    });
+
+    const zipFileName = `Payslips_${monthName}_${yearNumber}.zip`;
+
+    // ==========================================
+    // RESPONSE HEADERS
+    // ==========================================
+
+    res.setHeader("Content-Type", "application/zip");
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${zipFileName}"`
+    );
+
+    // ==========================================
+// CREATE ZIP
+// ==========================================
+
+const archive = archiver("zip", {
+  zlib: { level: 9 },
+});
+
+archive.on("error", (error) => {
+  console.error("ZIP error:", error);
+
+  if (!res.headersSent) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create payslip ZIP",
+      error: error.message,
+    });
+  }
+
+  res.end();
+});
+
+// ZIP response headers
+res.setHeader(
+  "Content-Type",
+  "application/zip"
+);
+
+res.setHeader(
+  "Content-Disposition",
+  `attachment; filename="Payslips_${monthNumber}_${yearNumber}.zip"`
+);
+
+archive.pipe(res);
+
+// ==========================================
+// ADD PAYSLIP FILES
+// ==========================================
+
+let addedFiles = 0;
+
+for (const payroll of payrolls) {
+  for (const employee of payroll.employees || []) {
+    try {
+      if (!employee.payslipUrl) {
+        continue;
+      }
+
+      /*
+        Example:
+
+        employee.payslipUrl =
+        /uploads/payslips/Mohamed_Arif_August_2026.pdf
+      */
+
+      const relativePath = employee.payslipUrl
+        .replace(/^[/\\]+/, "")
+        .replace(/\//g, path.sep);
+
+      const filePath = path.join(
+        process.cwd(),
+        relativePath
+      );
+
+      console.log("Checking payslip:", filePath);
+
+      // ==========================================
+      // CHECK FILE EXISTS
+      // ==========================================
+
+      if (!fs.existsSync(filePath)) {
+        console.warn(
+          "Payslip file not found:",
+          filePath
+        );
+
+        continue;
+      }
+
+      // ==========================================
+      // EMPLOYEE DETAILS
+      // ==========================================
+
+      const employeeName =
+        employee.employeeName || "Employee";
+
+      const employeeCode =
+        employee.employeeCode || "";
+
+      const originalFileName =
+        path.basename(filePath);
+
+      // ==========================================
+      // ZIP FILE NAME
+      // ==========================================
+
+      const zipFileName = employeeCode
+        ? `${employeeCode}_${employeeName}_${originalFileName}`
+        : `${employeeName}_${originalFileName}`;
+
+      const safeFileName = zipFileName.replace(
+        /[\/\\:*?"<>|]/g,
+        "_"
+      );
+
+      // ==========================================
+      // ADD FILE TO ZIP
+      // ==========================================
+
+      archive.file(filePath, {
+        name: safeFileName,
+      });
+
+      addedFiles++;
+
+      console.log(
+        `Added payslip: ${safeFileName}`
+      );
+    } catch (fileError) {
+      console.error(
+        "Error adding payslip:",
+        fileError
+      );
+    }
+  }
+}
+
+console.log(
+  "Total payslips added:",
+  addedFiles
+);
+
+// ==========================================
+// NO FILES
+// ==========================================
+
+if (addedFiles === 0) {
+  archive.abort();
+
+  if (!res.headersSent) {
+    return res.status(404).json({
+      success: false,
+      message: "Payslip files were not found",
+    });
+  }
+
+  return;
+}
+
+// ==========================================
+// FINISH ZIP
+// ==========================================
+
+await archive.finalize();
+
+  } catch (error) {
+    console.log('build_downloadBulkPayslips error:', error);
+    console.error(
+      "Bulk payslip download error:",
+      error
+    );
+
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to download bulk payslips",
+        error: error.message,
+      });
+    }
   }
 };

@@ -11,7 +11,8 @@ const {
   sendEmployeePayslipMail,
   getMyPayslips,
   deletePayroll,
-  regenerateEmployeePayslip
+  regenerateEmployeePayslip,
+  downloadBulkPayslips,
 } = require("../controllers/payrollController");
 
 const {
@@ -32,6 +33,14 @@ router.get(
   allowRoles("admin", "hr", "employer"),
   getPayrollDashboard
 );
+
+router.get(
+  "/download-bulk-payslips",
+  verifyToken,
+  allowRoles("admin", "hr", "employer"),
+  downloadBulkPayslips
+);
+
 
 router.get(
   "/all",
@@ -86,5 +95,6 @@ router.delete(
   allowRoles("admin", "hr", "employer"),
   deletePayroll
 );
+
 
 module.exports = router;

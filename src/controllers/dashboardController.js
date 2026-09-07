@@ -13,6 +13,8 @@ const {
   percentage,
   getISTMonthRange,
 } = require("../utils/dashboardutils");
+
+const { timeToMinutes } = require("../utils/shiftAttendanceDate");
 /* ================= ADMIN DASHBOARD ================= */
 
 exports.getAdminDashboard = async (req, res) => {
@@ -20,10 +22,16 @@ exports.getAdminDashboard = async (req, res) => {
     const companyId = req.user.companyId;
     const { start, end } = getISTMonthRange();
 
+    const employees = await Employee.find({
+  companyId,
+  status: "active",
+})
+  .populate("shiftId", "shiftName name startTime endTime");
+
    const totalEmployees = await Employee.countDocuments({
   companyId,
   status: "active",
-});
+}).populate("shiftId", "shiftName name startTime endTime").lean();
 
 const recentEmployees = await Employee.find({
   companyId,
@@ -34,7 +42,7 @@ const recentEmployees = await Employee.find({
   )
   .populate("departmentId", "departmentName name")
   .populate("designationId", "designationName name")
-  .populate("shiftId", "shiftName name")
+  .populate("shiftId", "shiftName name startTime endTime")
   .sort({ createdAt: -1 }) // latest employees first
   .limit(5)
   .lean();
@@ -48,6 +56,10 @@ startOfToday.setHours(0, 0, 0, 0);
 
 const endOfToday = new Date(now);
 endOfToday.setHours(23, 59, 59, 999);
+
+
+const currentMinutes =
+  now.getHours() * 60 + now.getMinutes();
 
 // ================================
 // PRESENT TODAY
@@ -76,12 +88,25 @@ const onLeaveToday = await Leave.countDocuments({
 });
 
 console.log("On Leave Today:", onLeaveToday);
+console.log('emaployees_data:', employees.map(emp => ({ name: emp.fullName, shift: emp.shiftId?.shiftName, shiftStartTime: emp.shiftId?.startTime })));
+const expectedEmployees = employees.filter((employee) => {
+  const shiftStart = timeToMinutes(employee.shiftId?.startTime);
+console.log('employee:', employee.fullName, 'shiftStartTime:', employee.shiftId?.startTime, 'shiftStartMinutes:', shiftStart, 'currentMinutes:', currentMinutes);
+  if (shiftStart === null) return false;
+
+  return currentMinutes >= shiftStart;
+});
+
+console.log('expectedEmployees:', expectedEmployees.map(emp => ({ name: emp.fullName, shift: emp.shiftId?.shiftName, shiftStartTime: emp.shiftId?.startTime })));
+
+const expectedEmployeeCount = expectedEmployees.length;
 
     const absentTodayRaw =
-      totalEmployees - presentToday - onLeaveToday;
+      expectedEmployeeCount - presentToday - onLeaveToday;
 
-    const absentToday =
-      absentTodayRaw < 0 ? 0 : absentTodayRaw;
+    // const absentToday =      absentTodayRaw < 0 ? 0 : absentTodayRaw;
+
+      const absentToday = Math.max(absentTodayRaw, 0);
 
     const latestPayroll = await Payroll.findOne({
       companyId,

@@ -90,7 +90,7 @@ exports.calculateAttendance = (attendance) => {
       breakMinutes = DEFAULT_BREAK_MINUTES;
     }
 
-    attendance.totalBreakMinutes = breakMinutes;
+    attendance.totalBreakMinutes = breakMinutes > DEFAULT_BREAK_MINUTES ? breakMinutes : DEFAULT_BREAK_MINUTES;
 
     attendance.workingMinutes = Math.max(
       0,

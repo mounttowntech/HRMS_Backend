@@ -30,3 +30,28 @@ exports.calculateLateMinutesByShift = (attendanceDate, punchIn, shiftStartTime, 
 
   return lateMs > 0 ? Math.floor(lateMs / 60000) : 0;
 };
+
+exports.timeToMinutes = (time) => {
+  if (!time) return null;
+
+  const match = time.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+
+  if (!match) {
+    console.log("Invalid shift time:", time);
+    return null;
+  }
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3].toUpperCase();
+
+  if (period === "AM" && hours === 12) {
+    hours = 0;
+  }
+
+  if (period === "PM" && hours !== 12) {
+    hours += 12;
+  }
+
+  return hours * 60 + minutes;
+};
