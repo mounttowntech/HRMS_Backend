@@ -66,6 +66,577 @@ function getShiftWorkingMinutes(startTime, endTime) {
 
 
 // PROCESS PAYROLL
+// exports.processPayroll = async (req, res) => {
+//   try {
+//     const companyId = req.user.companyId;
+
+//     const { month, year } = req.body;
+
+//     if (!month || !year) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Month and Year are required",
+//       });
+//     }
+
+//     const existingPayroll = await Payroll.findOne({
+//       companyId,
+//       month,
+//       year,
+//     });
+
+//     if (existingPayroll) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Payroll already processed.",
+//       });
+//     }
+
+//     const { start, end } = getMonthRangeByMonthYear(
+//       month,
+//       year
+//     );
+
+//     const monthName = new Date(
+//       year,
+//       month - 1
+//     ).toLocaleString("en-US", {
+//       month: "long",
+//     });
+
+//     //get all shift details for all employees in the company
+//     const shifts = await Shift.find({ companyId });
+
+//     //get payslip calculation details for all employees in the company
+//     const payslipDetails = await PayslipCalculation.find({ companyId });
+// // console.log("payslipDetails:", payslipDetails);
+//     const employees = await Employee.find({
+//       companyId,
+//       status: "active",
+//     })
+//       .populate("designationId", "name")
+//       .populate("shiftId", "_id shiftName shiftType weekOff startTime endTime workingHours")
+//       .lean();
+
+//     let payrollEmployees = [];
+
+//     let totalEarnings = 0;
+//     let totalDeductions = 0;
+//     let netPayroll = 0;
+
+//     for (const employee of employees) {
+//       //get payslip calculation details for the employee
+//       const payslipCalculation = payslipDetails.find(
+//         (p) =>
+//           p.shiftId?.toString() === employee?.shiftId?._id?.toString()
+//       );
+
+//       if (!payslipCalculation) {
+//         throw new Error(
+//           `Payslip calculation not found for shift ${employee.shiftId?.shiftName}`
+//         );
+//       }
+
+//       // Prefer shift working hours
+// const FULL_DAY_MINUTES = getShiftWorkingMinutes(
+//   employee.shiftId?.startTime,
+//   employee.shiftId?.endTime
+// ) || 480; // Default to 8 hours if not defined
+
+// const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
+
+//       //===================================
+//       // PRESENT DAYS
+//       //===================================
+
+//       // const presentDays =
+//       //   await Attendance.countDocuments({
+//       //     companyId,
+//       //     employeeId: employee._id,
+//       //     status: "present",
+//       //     date: {
+//       //       $gte: start,
+//       //       $lte: end,
+//       //     },
+//       //   });
+
+//       const attendances = await Attendance.find({
+//         companyId,
+//         employeeId: employee._id,
+//         date: {
+//           $gte: start,
+//           $lte: end,
+//         },
+//       }).select("employeeId workingMinutes status permissionMinutes permissionApproved").lean();
+
+//       let payablePresentDays = 0;
+//       let minutes = 0;
+//       let fullday = 0;
+//       let halfday = 0;
+
+//       for (const attendance of attendances) {
+//         // check static emp id data
+//         // console.log(`Processing attendance for employee: ${attendance.employeeId}, status: ${attendance.status}, workingMinutes: ${attendance.workingMinutes}, permissionApproved: ${attendance.permissionApproved}, permissionMinutes: ${attendance.permissionMinutes}`);
+// if(attendance.employeeId == '6a30dcabe4ce02a7fe274503') {
+//   console.log(`Processing attendance for special employee: ${attendance.employeeId} - status: ${attendance.status}, workingMinutes: ${attendance.workingMinutes}, permissionApproved: ${attendance.permissionApproved}, permissionMinutes: ${attendance.permissionMinutes}`);
+// }
+//         if (attendance.status === "holiday") continue;
+//         if (attendance.status === "weekoff") continue;
+
+//          minutes = attendance.workingMinutes || 0;
+//         if(attendance.permissionApproved) {
+//           const permissionMinutes = attendance.permissionMinutes || 0;
+//           minutes += permissionMinutes;
+//         }
+
+//         if (minutes >= FULL_DAY_MINUTES) {
+//           payablePresentDays += 1;
+//           fullday++;
+//         } else if (minutes >= HALF_DAY_MINUTES) {
+//           payablePresentDays += 0.5;
+//           halfday++;
+//         }
+//       }
+// console.log(`Employee ${employee.fullName} (ID: ${employee._id}) - Payable Present Days: ${payablePresentDays} worked minutes: ${minutes} Full days: ${fullday} Half days: ${halfday}`);
+//       //===================================
+//       // PAID LEAVE DAYS
+//       //===================================
+
+//       const paidLeaveDays =
+//         await Leave.aggregate([
+//           {
+//             $match: {
+//               companyId: employee.companyId,
+//               employeeId: employee._id,
+//               leaveType: "paid",
+//               status: "approved",
+//               fromDate: {
+//                 $lte: end,
+//               },
+//               toDate: {
+//                 $gte: start,
+//               },
+//             },
+//           },
+//           {
+//             $group: {
+//               _id: null,
+//               total: {
+//                 $sum: "$days",
+//               },
+//             },
+//           },
+//         ]);
+
+//       const paidLeaves =
+//         paidLeaveDays.length > 0
+//           ? paidLeaveDays[0].total
+//           : 0;
+//           console.log('employee_id:', employee._id, 'paidLeaves:', paidLeaves);
+// if(employee._id == '6a30dcabe4ce02a7fe274503') {
+//   console.log(`Employee ${employee.fullName} (ID: ${employee._id}) - Paid Leaves: ${paidLeaves}`);
+// }
+
+
+//       //===================================
+//       // HOLIDAYS
+//       //===================================
+
+//       const holidayCount =
+//         await Holiday.countDocuments({
+//           companyId,
+//           holidayDate: {
+//             $gte: start,
+//             $lte: end,
+//           },
+//         });
+
+//       //===================================
+//       // WEEK OFF
+//       //===================================
+
+//       const weekOffCount =
+//         getWeekOffCount(
+//           start,
+//           end,
+//           employee.shiftId?.weekOff || ["Sunday"]
+//         );
+
+//       //===================================
+//       // TOTAL DAYS
+//       //===================================
+
+//       // const totalDays =  new Date(year, month, 0).getDate();
+
+//         const totalWorkingDays =  Number(payslipCalculation.totalWorkingDaysPerMonth);
+
+//       //===================================
+//       // PAID DAYS
+//       //===================================
+
+//       // const paidDays =
+//       //   presentDays +
+//       //   paidLeaves +
+//       //   holidayCount +
+//       //   weekOffCount;
+
+//       if(employee._id == '6a30dcabe4ce02a7fe274503') {
+//         console.log(`Employee  day cal:${payablePresentDays} (paidLeaves: ${paidLeaves}, holidayCount: ${holidayCount}, weekOffCount: ${weekOffCount}) - Processing payslip`);
+//       }
+//       const paidDays = payablePresentDays + paidLeaves + holidayCount + weekOffCount;
+//       if(employee._id == '6a30dcabe4ce02a7fe274503') {
+// console.log(`Employee ${employee.fullName} (ID: ${employee._id}) - Paid Days: ${paidDays} (Present: ${payablePresentDays}, Paid Leaves: ${paidLeaves}, Holidays: ${holidayCount}, Week Offs: ${weekOffCount})`);
+//       }
+//       const absentDays =  Math.max(0, totalWorkingDays - paidDays);
+
+//       //===================================
+//       // SALARY
+//       //===================================
+
+//       const monthlySalary =
+//         Number(employee.salary || 0);
+
+//       const perDaySalary =
+//         monthlySalary / totalWorkingDays;
+
+//       const earnedSalary =
+//         perDaySalary * paidDays;
+
+//       //===================================
+//       // EARNINGS
+//       //===================================
+
+//       // const basicSalary =
+//       //   earnedSalary * 0.50;
+
+//       // const hra =
+//       //   basicSalary * 0.40;
+
+//       // const medicalAllowance =
+//       //   earnedSalary * 0.10;
+
+//       // const conveyanceAllowance =
+//       //   earnedSalary * 0.10;
+
+//       // const shiftAllowance =
+//       //   employee.shiftId?.shiftType ===
+//       //   "night"
+//       //     ? earnedSalary * 0.10
+//       //     : earnedSalary * 0.05;
+
+//       const basicSalary =
+//   earnedSalary *
+//   ((payslipCalculation.basicPercentage || 50) / 100);
+
+// const hra =
+//   basicSalary *
+//   ((payslipCalculation.hraPercentage || 40) / 100);
+
+// // Prorated fixed allowances
+// const ratio =
+//   paidDays / totalWorkingDays;
+
+//   // the travel allownce only for moring shift not for night shift
+
+// const travelAllowance =
+//   employee.shiftId?.shiftType === "general"
+//     ? (1000/totalWorkingDays) * paidDays
+//     : 0;
+
+// const medicalAllowance =
+//   (500/totalWorkingDays) * paidDays;
+
+// const conveyanceAllowance = (500/totalWorkingDays) * paidDays;
+
+// const shiftAllowance =
+//   (payslipCalculation.nightShiftAllowance || 0) * ratio;
+
+
+
+//       // const otherAllowance =
+//       //   Math.max(
+//       //     0,
+//       //     earnedSalary -
+//       //       (
+//       //         basicSalary +
+//       //         hra +
+//       //         medicalAllowance +
+//       //         conveyanceAllowance +
+//       //         shiftAllowance
+//       //       )
+//       //   );
+
+//       const otherAllowance =
+//   Math.max(
+//     0,
+//     earnedSalary -
+//       (
+//         basicSalary +
+//         hra +
+//         travelAllowance +
+//         medicalAllowance +
+//         conveyanceAllowance +
+//         shiftAllowance
+//       )
+//   );
+
+//       // const grossEarning =
+//       //   basicSalary +
+//       //   hra +
+//       //   medicalAllowance +
+//       //   conveyanceAllowance +
+//       //   shiftAllowance +
+//       //   otherAllowance;
+
+
+//         const grossEarning =
+//   basicSalary +
+//   hra +
+//   travelAllowance +
+//   medicalAllowance +
+//   conveyanceAllowance +
+//   shiftAllowance +
+//   otherAllowance;
+
+//       //===================================
+//       // DEDUCTIONS
+//       //===================================
+
+//       // const pfDeduction =
+//       //   basicSalary * 0.12;
+
+//       // const esiDeduction =
+//       //   grossEarning <= 21000
+//       //     ? grossEarning * 0.0075
+//       //     : 0;
+
+//       const pfDeduction =
+//   basicSalary *
+//   ((payslipCalculation.employeePFPercentage || 12) / 100);
+
+//   const employerPFContribution =
+//   basicSalary *
+//   ((payslipCalculation.employerPFPercentage || 12) / 100);
+
+// const esiDeduction =
+//   grossEarning <= 21000
+//     ? grossEarning *
+//       ((payslipCalculation.employeeESIPercentage || 0.75) / 100)
+//     : 0;
+
+//     const employerESIContribution =
+//   grossEarning <= 21000
+//     ? grossEarning *
+//       ((payslipCalculation.employerESIPercentage || 0.75) / 100)
+//     : 0;
+
+//       const totalDeduction =
+//         pfDeduction +
+//         esiDeduction + employerPFContribution + employerESIContribution;
+
+//       const netSalary =
+//         grossEarning -
+//         totalDeduction;
+
+//       //===================================
+//       // PAYSLIP
+//       //===================================
+
+//       const payrollData = {
+//         totalWorkingDays,
+
+//         payablePresentDays,
+
+//         paidLeaveDays: paidLeaves,
+
+//         holidayDays: holidayCount,
+
+//         weekOffDays: weekOffCount,
+
+//         paidDays,
+
+//         absentDays,
+
+//         monthlySalary:
+//           roundAmount(monthlySalary),
+
+//         earnedSalary:
+//           roundAmount(earnedSalary),
+
+//         travelAllowance:
+//           roundAmount(travelAllowance),
+
+//         perDaySalary:
+//           roundAmount(perDaySalary),
+
+//         designation:
+//           employee.designationId?.name ||
+//           "",
+
+//         shiftName:
+//           employee.shiftId?.shiftName ||
+//           "",
+
+//         basicSalary:
+//           roundAmount(basicSalary),
+
+//         hra:
+//           roundAmount(hra),
+
+//         medicalAllowance:
+//           roundAmount(
+//             medicalAllowance
+//           ),
+
+//         conveyanceAllowance:
+//           roundAmount(
+//             conveyanceAllowance
+//           ),
+
+//         shiftAllowance:
+//           roundAmount(
+//             shiftAllowance
+//           ),
+
+//         otherAllowance:
+//           roundAmount(
+//             otherAllowance
+//           ),
+
+//         grossEarning:
+//           roundAmount(
+//             grossEarning
+//           ),
+
+//         pfDeduction:
+//           roundAmount(
+//             pfDeduction
+//           ),
+
+//         employerPFContribution:
+//           roundAmount(
+//             employerPFContribution
+//           ),
+
+//         esiDeduction:
+//           roundAmount(
+//             esiDeduction
+//           ),
+
+//         employerESIContribution:
+//           roundAmount(
+//             employerESIContribution
+//           ),
+
+//         totalDeduction:
+//           roundAmount(
+//             totalDeduction
+//           ),
+
+//         netSalary:
+//           roundAmount(netSalary),
+//       };
+
+//       const payslipUrl =
+//         await generatePayslip({
+//           employee,
+//           payrollData,
+//           monthName,
+//           year,
+//         });
+
+//       payrollEmployees.push({
+//         employeeId:
+//           employee._id,
+
+//         employeeCode:
+//           employee.employeeCode,
+
+//         employeeName:
+//           employee.fullName,
+
+//         role:
+//           employee.role,
+
+//         ...payrollData,
+
+//         payslipUrl,
+//       });
+
+//       totalEarnings +=
+//         grossEarning;
+
+//       totalDeductions +=
+//         totalDeduction;
+
+//       netPayroll +=
+//         netSalary;
+//     }
+
+//     const payroll =
+//       await Payroll.create({
+//         companyId,
+
+//         month,
+
+//         year,
+
+//         payrollName:
+//           `${monthName} Payroll ${year}`,
+
+//         period:
+//           `${start.toLocaleDateString(
+//             "en-GB"
+//           )} - ${end.toLocaleDateString(
+//             "en-GB"
+//           )}`,
+
+//         totalEmployees:
+//           payrollEmployees.length,
+
+//         totalEarnings:
+//           roundAmount(
+//             totalEarnings
+//           ),
+
+//         totalDeductions:
+//           roundAmount(
+//             totalDeductions
+//           ),
+
+//         netPayroll:
+//           roundAmount(
+//             netPayroll
+//           ),
+
+//         employees:
+//           payrollEmployees,
+
+//         processedBy:
+//           req.user.id,
+
+//         status:
+//           "Completed",
+//       });
+
+//     return res.status(201).json({
+//       success: true,
+//       message:
+//         "Payroll processed successfully",
+//       data: payroll,
+//     });
+//   } catch (error) {
+//     console.log(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// PROCESS PAYROLL
+
 exports.processPayroll = async (req, res) => {
   try {
     const companyId = req.user.companyId;
@@ -78,6 +649,10 @@ exports.processPayroll = async (req, res) => {
         message: "Month and Year are required",
       });
     }
+
+    // ===================================
+    // CHECK EXISTING PAYROLL
+    // ===================================
 
     const existingPayroll = await Payroll.findOne({
       companyId,
@@ -92,6 +667,10 @@ exports.processPayroll = async (req, res) => {
       });
     }
 
+    // ===================================
+    // MONTH RANGE
+    // ===================================
+
     const { start, end } = getMonthRangeByMonthYear(
       month,
       year
@@ -104,19 +683,30 @@ exports.processPayroll = async (req, res) => {
       month: "long",
     });
 
-    //get all shift details for all employees in the company
-    const shifts = await Shift.find({ companyId });
+    // ===================================
+    // GET PAYSLIP CALCULATION
+    // ===================================
 
-    //get payslip calculation details for all employees in the company
-    const payslipDetails = await PayslipCalculation.find({ companyId });
-// console.log("payslipDetails:", payslipDetails);
-    const employees = await Employee.find({
-      companyId,
-      status: "active",
-    })
-      .populate("designationId", "name")
-      .populate("shiftId", "_id shiftName shiftType weekOff startTime endTime workingHours")
-      .lean();
+    const payslipDetails =
+      await PayslipCalculation.find({
+        companyId,
+      });
+
+    // ===================================
+    // GET ACTIVE EMPLOYEES
+    // ===================================
+
+    const employees =
+      await Employee.find({
+        companyId,
+        status: "active",
+      })
+        .populate("designationId", "name")
+        .populate(
+          "shiftId",
+          "_id shiftName shiftType weekOff startTime endTime workingHours"
+        )
+        .lean();
 
     let payrollEmployees = [];
 
@@ -124,12 +714,21 @@ exports.processPayroll = async (req, res) => {
     let totalDeductions = 0;
     let netPayroll = 0;
 
+    // ===================================
+    // PROCESS EACH EMPLOYEE
+    // ===================================
+
     for (const employee of employees) {
-      //get payslip calculation details for the employee
-      const payslipCalculation = payslipDetails.find(
-        (p) =>
-          p.shiftId?.toString() === employee?.shiftId?._id?.toString()
-      );
+      // ===================================
+      // PAYSLIP CALCULATION CONFIG
+      // ===================================
+
+      const payslipCalculation =
+        payslipDetails.find(
+          (p) =>
+            p.shiftId?.toString() ===
+            employee?.shiftId?._id?.toString()
+        );
 
       if (!payslipCalculation) {
         throw new Error(
@@ -137,81 +736,160 @@ exports.processPayroll = async (req, res) => {
         );
       }
 
-      // Prefer shift working hours
-const FULL_DAY_MINUTES = getShiftWorkingMinutes(
-  employee.shiftId?.startTime,
-  employee.shiftId?.endTime
-) || 480; // Default to 8 hours if not defined
+      // ===================================
+      // SHIFT WORKING MINUTES
+      // ===================================
 
-const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
+      const FULL_DAY_MINUTES =
+        getShiftWorkingMinutes(
+          employee.shiftId?.startTime,
+          employee.shiftId?.endTime
+        ) || 480;
 
-      //===================================
-      // PRESENT DAYS
-      //===================================
+      const HALF_DAY_MINUTES =
+        FULL_DAY_MINUTES / 2;
 
-      // const presentDays =
-      //   await Attendance.countDocuments({
-      //     companyId,
-      //     employeeId: employee._id,
-      //     status: "present",
-      //     date: {
-      //       $gte: start,
-      //       $lte: end,
-      //     },
-      //   });
+      // ===================================
+      // ATTENDANCE
+      // ===================================
 
-      const attendances = await Attendance.find({
-        companyId,
-        employeeId: employee._id,
-        date: {
-          $gte: start,
-          $lte: end,
-        },
-      }).select("workingMinutes status permissionMinutes permissionApproved").lean();
+      const attendances =
+        await Attendance.find({
+          companyId,
+          employeeId: employee._id,
+          date: {
+            $gte: start,
+            $lte: end,
+          },
+        })
+          .select(
+            "employeeId workingMinutes status permissionMinutes permissionApproved"
+          )
+          .lean();
 
       let payablePresentDays = 0;
 
+      let totalWorkedMinutes = 0;
+
+      let fullday = 0;
+
+      let halfday = 0;
+
       for (const attendance of attendances) {
+        // -----------------------------------
+        // HOLIDAY
+        // -----------------------------------
 
-        if (attendance.status === "holiday") continue;
-        if (attendance.status === "weekoff") continue;
+        if (
+          attendance.status === "holiday"
+        ) {
+          continue;
+        }
 
-        let minutes = attendance.workingMinutes || 0;
-        if(attendance.permissionApproved) {
-          const permissionMinutes = attendance.permissionMinutes || 0;
+        // -----------------------------------
+        // WEEK OFF
+        // -----------------------------------
+
+        if (
+          attendance.status === "weekoff"
+        ) {
+          continue;
+        }
+
+        // -----------------------------------
+        // WORKED MINUTES
+        // -----------------------------------
+
+        let minutes =
+          Number(
+            attendance.workingMinutes || 0
+          );
+
+        // -----------------------------------
+        // APPROVED PERMISSION
+        // -----------------------------------
+
+        if (
+          attendance.permissionApproved
+        ) {
+          const permissionMinutes =
+            Number(
+              attendance.permissionMinutes || 0
+            );
+
           minutes += permissionMinutes;
         }
 
-        if (minutes >= FULL_DAY_MINUTES) {
+        totalWorkedMinutes += minutes;
+
+        // -----------------------------------
+        // FULL DAY
+        // -----------------------------------
+
+        if (
+          minutes >= FULL_DAY_MINUTES
+        ) {
           payablePresentDays += 1;
-        } else if (minutes >= HALF_DAY_MINUTES) {
+          fullday++;
+        }
+
+        // -----------------------------------
+        // HALF DAY
+        // -----------------------------------
+
+        else if (
+          minutes >= HALF_DAY_MINUTES
+        ) {
           payablePresentDays += 0.5;
+          halfday++;
         }
       }
 
-      //===================================
-      // PAID LEAVE DAYS
-      //===================================
+      // Avoid floating point problems and add leave count
+      payablePresentDays =
+        Math.round(
+          payablePresentDays * 100
+        ) / 100;
+if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+      console.log(
+        `Employee ${employee.fullName} (${employee._id}) - ` +
+        `Present: ${payablePresentDays}, ` +
+        `Worked Minutes: ${totalWorkedMinutes}, ` +
+        `Full Days: ${fullday}, ` +
+        `Half Days: ${halfday}`
+      );
+    }
+
+      // ===================================
+      // PAID LEAVE
+      // ===================================
 
       const paidLeaveDays =
         await Leave.aggregate([
           {
             $match: {
               companyId: employee.companyId,
+
               employeeId: employee._id,
+
               leaveType: "paid",
+
               status: "approved",
+
               fromDate: {
                 $lte: end,
               },
+
               toDate: {
                 $gte: start,
               },
             },
           },
+
           {
             $group: {
               _id: null,
+
               total: {
                 $sum: "$days",
               },
@@ -221,234 +899,770 @@ const HALF_DAY_MINUTES =  FULL_DAY_MINUTES / 2;
 
       const paidLeaves =
         paidLeaveDays.length > 0
-          ? paidLeaveDays[0].total
+          ? Number(
+              paidLeaveDays[0].total || 0
+            )
           : 0;
 
-      //===================================
+      // ===================================
+      // TOTAL APPROVED LEAVE
+      // ===================================
+
+      const totalLeaveDaysResult =
+        await Leave.aggregate([
+          {
+            $match: {
+              companyId: employee.companyId,
+
+              employeeId: employee._id,
+
+              status: "approved",
+
+              fromDate: {
+                $lte: end,
+              },
+
+              toDate: {
+                $gte: start,
+              },
+            },
+          },
+
+          {
+            $group: {
+              _id: null,
+
+              total: {
+                $sum: "$days",
+              },
+            },
+          },
+        ]);
+
+      const totalLeaveDays =
+        totalLeaveDaysResult.length > 0
+          ? Number(
+              totalLeaveDaysResult[0].total || 0
+            )
+          : 0;
+
+      // ===================================
+      // UNPAID LEAVE
+      // ===================================
+
+      const unpaidLeaveDays =
+        Math.max(
+          0,
+          totalLeaveDays - paidLeaves
+        );
+
+      if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+        console.log(
+          `Employee ${employee.fullName} - ` +
+          `Total Leave: ${totalLeaveDays}, ` +
+          `Paid Leave: ${paidLeaves}, ` +
+          `Unpaid Leave: ${unpaidLeaveDays}`
+        );
+      }
+
+      // ===================================
       // HOLIDAYS
-      //===================================
+      // ===================================
 
       const holidayCount =
         await Holiday.countDocuments({
           companyId,
+
           holidayDate: {
             $gte: start,
             $lte: end,
           },
         });
 
-      //===================================
+      // ===================================
       // WEEK OFF
-      //===================================
+      // ===================================
 
       const weekOffCount =
         getWeekOffCount(
           start,
           end,
-          employee.shiftId?.weekOff || ["Sunday"]
+          employee.shiftId?.weekOff ||
+            ["Sunday"]
         );
 
-      //===================================
-      // TOTAL DAYS
-      //===================================
+      // ===================================
+      // OFFICE WORKING DAYS
+      // ===================================
 
-      // const totalDays =  new Date(year, month, 0).getDate();
+      const officeWorkingDays =
+        Number(
+          payslipCalculation.totalWorkingDaysPerMonth
+        );
 
-        const totalWorkingDays =  Number(payslipCalculation.totalWorkingDaysPerMonth);
+      if (
+        !officeWorkingDays ||
+        officeWorkingDays <= 0
+      ) {
+        throw new Error(
+          `Invalid office working days configured for shift ${employee.shiftId?.shiftName}`
+        );
+      }
 
-      //===================================
-      // PAID DAYS
-      //===================================
+      // ===================================
+      // FIXED SALARY DAYS
+      // ===================================
 
-      // const paidDays =
-      //   presentDays +
-      //   paidLeaves +
-      //   holidayCount +
-      //   weekOffCount;
+      let fixedSalaryDays = 24;
 
-      const paidDays = payablePresentDays + paidLeaves + holidayCount + weekOffCount;
+      if (
+        employee.shiftId?.shiftType ===
+        "night"
+      ) {
+        fixedSalaryDays = 22;
+      }
 
-      const absentDays =  Math.max(0, totalWorkingDays - paidDays);
+      // ===================================
+      // SALARY PAYABLE DAYS
+      // ===================================
 
-      //===================================
+      /*
+        Salary calculation:
+
+        Fixed Salary Days
+        -
+        Unpaid Leave
+        =
+        Final Salary Payable Days
+
+        Example:
+
+        Fixed Salary Days = 24
+        Unpaid Leave      = 0
+
+        Final Salary Payable Days = 24
+      */
+
+      const salaryDeductionDays =
+        unpaidLeaveDays;
+
+        if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+          console.log('salaryDeductionDays:', fixedSalaryDays, salaryDeductionDays);
+        }
+
+       
+
+      // ===================================
+      // OFFICE ATTENDANCE DAYS
+      // ===================================
+
+      /*
+        Attendance calculation is separate
+        from salary calculation.
+
+        Example:
+
+        Office Working Days = 24
+        Present             = 21.5
+
+        Attendance Gap:
+
+        24 - 21.5 = 2.5
+      */
+
+      const attendanceGap =
+        Math.max(
+          0,
+          officeWorkingDays -
+            payablePresentDays
+        );
+
+      // ===================================
+      // PAID LEAVE USED FOR ATTENDANCE
+      // ===================================
+
+      const paidLeaveUsedForAttendance =
+        Math.min(
+          paidLeaves,
+          attendanceGap
+        );
+
+      // ===================================
+      // ABSENT DAYS
+      // ===================================
+
+      const absentDays =
+        Math.max(
+          0,
+          attendanceGap -
+            paidLeaveUsedForAttendance
+        );
+
+      // ===================================
+      // HALF DAY VALUE
+      // ===================================
+
+      const halfDayValue =
+        halfday * 0.5;
+
+      // ===================================
+      // ATTENDANCE WORKING DAYS
+      // ===================================
+
+      /*
+        Present already includes half day.
+
+        Example:
+
+        Full Days = 21
+        Half Days = 1
+
+        Attendance Working Days = 21.5
+      */
+
+         const reduceAvailableleaveDaysInLeaveDays = Math.max(0, absentDays - paidLeaveUsedForAttendance);
+
+      const paidDays =
+        Math.max(
+          0,
+          fixedSalaryDays -
+            reduceAvailableleaveDaysInLeaveDays
+        );
+
+      const attendanceWorkingDays =
+        payablePresentDays;
+        if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+console.log(`Employee ${employee.fullName} - ` +`Attendance Working Days: ${attendanceWorkingDays}, ` +`Paid Leave Used For Attendance: ${paidLeaveUsedForAttendance}, ` +`Absent Days: ${absentDays}, ` +`Week Off Days: ${weekOffCount}, ` +`Holiday Days: ${holidayCount}, ` +`Salary Deduction Days: ${salaryDeductionDays}, ` +`Final Salary Payable Days: ${paidDays}`);
+        }
+      // ===================================
+      // TOTAL PAID DAYS
+      // ===================================
+
+      /*
+        Total Paid Days means:
+
+        Attendance Working Days
+        +
+        Paid Leave Used For Attendance
+
+        Example:
+
+        Attendance Working Days = 21.5
+        Paid Leave Used         = 1
+
+        Total Paid Days = 22.5
+      */
+
+        
+
+      // const totalPaidDays =
+      //   attendanceWorkingDays +
+      //   paidLeaveUsedForAttendance +  absentDays;
+
+      const totalPaidDays = fixedSalaryDays - reduceAvailableleaveDaysInLeaveDays;
+
+
+
+      const roundedTotalPaidDays =
+        Math.round(
+          totalPaidDays * 100
+        ) / 100;
+
+        if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+        console.log(`Employee ${employee.fullName} - ` +`Total Paid Days: ${roundedTotalPaidDays} totalPaidDays: ${totalPaidDays} attendanceWorkingDays: ${attendanceWorkingDays} paidLeaveUsedForAttendance: ${paidLeaveUsedForAttendance}`);
+      }
+
+      // ===================================
+      // DEBUG
+      // ===================================
+
+      if (
+        employee._id.toString() ===
+          "6a30dcabe4ce02a7fe274503" ||
+        employee._id.toString() ===
+          "6a30f21105b3c24a33691fcb"
+      ) {
+        console.log(
+          "===================================="
+        );
+
+        console.log(
+          `Employee: ${employee.fullName}`
+        );
+
+        console.log(
+          `Office Working Days: ${officeWorkingDays}`
+        );
+
+        console.log(
+          `Fixed Salary Days: ${fixedSalaryDays}`
+        );
+
+        console.log(
+          `Full Days: ${fullday}`
+        );
+
+        console.log(
+          `Half Days: ${halfday}`
+        );
+
+        console.log(
+          `Half Day Value: ${halfDayValue}`
+        );
+
+        console.log(
+          `Present Days: ${payablePresentDays}`
+        );
+
+        console.log(
+          `Attendance Working Days: ${attendanceWorkingDays}`
+        );
+
+        console.log(
+          `Total Paid Days: ${roundedTotalPaidDays}`
+        );
+
+        console.log(
+          `Total Leave Days: ${totalLeaveDays}`
+        );
+
+        console.log(
+          `Paid Leave Days: ${paidLeaves}`
+        );
+
+        console.log(
+          `Unpaid Leave Days: ${unpaidLeaveDays}`
+        );
+
+        console.log(
+          `Attendance Gap: ${attendanceGap}`
+        );
+
+        console.log(
+          `Paid Leave Used For Attendance: ${paidLeaveUsedForAttendance}`
+        );
+
+        console.log(
+          `Absent Days: ${absentDays}`
+        );
+
+        console.log(
+          `Week Off Days: ${weekOffCount}`
+        );
+
+        console.log(
+          `Holiday Days: ${holidayCount}`
+        );
+
+        console.log(
+          `Salary Deduction Days: ${salaryDeductionDays}`
+        );
+
+        console.log(
+          `Final Salary Payable Days: ${paidDays}`
+        );
+
+        console.log(
+          "===================================="
+        );
+      }
+
+      // ===================================
       // SALARY
-      //===================================
+      // ===================================
 
       const monthlySalary =
         Number(employee.salary || 0);
 
+      // ===================================
+      // PER DAY SALARY
+      // ===================================
+
       const perDaySalary =
-        monthlySalary / totalWorkingDays;
+        monthlySalary /
+        fixedSalaryDays;
+
+      // ===================================
+      // EARNED SALARY
+      // ===================================
 
       const earnedSalary =
-        perDaySalary * paidDays;
+        perDaySalary *
+        paidDays;
 
-      //===================================
-      // EARNINGS
-      //===================================
+      console.log(
+        `Employee ${employee.fullName} - ` +
+        `Monthly Salary: ${monthlySalary}, ` +
+        `Fixed Salary Days: ${fixedSalaryDays}, ` +
+        `Per Day Salary: ${perDaySalary}, ` +
+        `Paid Days: ${paidDays}, ` +
+        `Earned Salary: ${earnedSalary}`
+      );
 
-      // const basicSalary =
-      //   earnedSalary * 0.50;
-
-      // const hra =
-      //   basicSalary * 0.40;
-
-      // const medicalAllowance =
-      //   earnedSalary * 0.10;
-
-      // const conveyanceAllowance =
-      //   earnedSalary * 0.10;
-
-      // const shiftAllowance =
-      //   employee.shiftId?.shiftType ===
-      //   "night"
-      //     ? earnedSalary * 0.10
-      //     : earnedSalary * 0.05;
+      // ===================================
+      // BASIC SALARY
+      // ===================================
 
       const basicSalary =
-  earnedSalary *
-  ((payslipCalculation.basicPercentage || 50) / 100);
+        earnedSalary *
+        (
+          (
+            payslipCalculation
+              .basicPercentage || 50
+          ) / 100
+        );
 
-const hra =
-  basicSalary *
-  ((payslipCalculation.hraPercentage || 40) / 100);
+      // ===================================
+      // HRA
+      // ===================================
 
-// Prorated fixed allowances
-const ratio =
-  paidDays / totalWorkingDays;
+      const hra =
+        basicSalary *
+        (
+          (
+            payslipCalculation
+              .hraPercentage || 40
+          ) / 100
+        );
 
-  // the travel allownce only for moring shift not for night shift
+      // ===================================
+      // ALLOWANCE RATIO
+      // ===================================
 
-const travelAllowance =
-  employee.shiftId?.shiftType === "general"
-    ? (1000/totalWorkingDays) * paidDays
-    : 0;
+      const ratio =
+        paidDays /
+        fixedSalaryDays;
 
-const medicalAllowance =
-  (500/totalWorkingDays) * paidDays;
+      // ===================================
+      // TRAVEL ALLOWANCE
+      // ===================================
 
-const conveyanceAllowance = (500/totalWorkingDays) * paidDays;
+      const travelAllowance =
+        employee.shiftId?.shiftType ===
+        "general"
+          ? (1000 / fixedSalaryDays) *
+            paidDays
+          : 0;
 
-const shiftAllowance =
-  (payslipCalculation.nightShiftAllowance || 0) * ratio;
+      // ===================================
+      // MEDICAL ALLOWANCE
+      // ===================================
 
+      const medicalAllowance =
+        (500 / fixedSalaryDays) *
+        paidDays;
 
+      // ===================================
+      // CONVEYANCE ALLOWANCE
+      // ===================================
 
-      // const otherAllowance =
-      //   Math.max(
-      //     0,
-      //     earnedSalary -
-      //       (
-      //         basicSalary +
-      //         hra +
-      //         medicalAllowance +
-      //         conveyanceAllowance +
-      //         shiftAllowance
-      //       )
-      //   );
+      const conveyanceAllowance =
+        (500 / fixedSalaryDays) *
+        paidDays;
+
+      // ===================================
+      // NIGHT SHIFT ALLOWANCE
+      // ===================================
+
+      const shiftAllowance =
+        (
+          payslipCalculation
+            .nightShiftAllowance || 0
+        ) * ratio;
+
+      // ===================================
+      // OTHER ALLOWANCE
+      // ===================================
 
       const otherAllowance =
-  Math.max(
-    0,
-    earnedSalary -
-      (
+        Math.max(
+          0,
+          earnedSalary -
+            (
+              basicSalary +
+              hra +
+              travelAllowance +
+              medicalAllowance +
+              conveyanceAllowance +
+              shiftAllowance
+            )
+        );
+
+      // ===================================
+      // GROSS EARNING
+      // ===================================
+
+      const grossEarning =
         basicSalary +
         hra +
         travelAllowance +
         medicalAllowance +
         conveyanceAllowance +
-        shiftAllowance
-      )
-  );
+        shiftAllowance +
+        otherAllowance;
 
-      // const grossEarning =
-      //   basicSalary +
-      //   hra +
-      //   medicalAllowance +
-      //   conveyanceAllowance +
-      //   shiftAllowance +
-      //   otherAllowance;
-
-
-        const grossEarning =
-  basicSalary +
-  hra +
-  travelAllowance +
-  medicalAllowance +
-  conveyanceAllowance +
-  shiftAllowance +
-  otherAllowance;
-
-      //===================================
-      // DEDUCTIONS
-      //===================================
-
-      // const pfDeduction =
-      //   basicSalary * 0.12;
-
-      // const esiDeduction =
-      //   grossEarning <= 21000
-      //     ? grossEarning * 0.0075
-      //     : 0;
+      // ===================================
+      // PF DEDUCTION
+      // ===================================
 
       const pfDeduction =
-  basicSalary *
-  ((payslipCalculation.employeePFPercentage || 12) / 100);
+        basicSalary *
+        (
+          (
+            payslipCalculation
+              .employeePFPercentage || 12
+          ) / 100
+        );
 
-  const employerPFContribution =
-  basicSalary *
-  ((payslipCalculation.employerPFPercentage || 12) / 100);
+      // ===================================
+      // EMPLOYER PF
+      // ===================================
 
-const esiDeduction =
-  grossEarning <= 21000
-    ? grossEarning *
-      ((payslipCalculation.employeeESIPercentage || 0.75) / 100)
-    : 0;
+      const employerPFContribution =
+        basicSalary *
+        (
+          (
+            payslipCalculation
+              .employerPFPercentage || 12
+          ) / 100
+        );
 
-    const employerESIContribution =
-  grossEarning <= 21000
-    ? grossEarning *
-      ((payslipCalculation.employerESIPercentage || 0.75) / 100)
-    : 0;
+      // ===================================
+      // ESI
+      // ===================================
+
+      const esiDeduction =
+        grossEarning <= 21000
+          ? grossEarning *
+            (
+              (
+                payslipCalculation
+                  .employeeESIPercentage ||
+                0.75
+              ) / 100
+            )
+          : 0;
+
+      // ===================================
+      // EMPLOYER ESI
+      // ===================================
+
+      const employerESIContribution =
+        grossEarning <= 21000
+          ? grossEarning *
+            (
+              (
+                payslipCalculation
+                  .employerESIPercentage ||
+                0.75
+              ) / 100
+            )
+          : 0;
+
+      // ===================================
+      // TOTAL DEDUCTION
+      // ===================================
 
       const totalDeduction =
         pfDeduction +
-        esiDeduction + employerPFContribution + employerESIContribution;
+        esiDeduction +
+        employerPFContribution +
+        employerESIContribution;
+if(employee._id.toString() === '6a30dcabe4ce02a7fe274503' || employee._id.toString() === '6a30f21105b3c24a33691fcb') {
+      console.log(
+        `Employee ${employee.fullName} - ` +
+        `Gross Earning: ${grossEarning}, ` +
+        `PF Deduction: ${pfDeduction}, ` +
+        `Employer PF Contribution: ${employerPFContribution}, ` +
+        `ESI Deduction: ${esiDeduction}, ` +
+        `Employer ESI Contribution: ${employerESIContribution}, ` +
+        `Total Deduction: ${totalDeduction}`
+      );
+    }
+      // ===================================
+      // NET SALARY
+      // ===================================
 
-      const netSalary =
-        grossEarning -
-        totalDeduction;
+      // const netSalary =
+      //   grossEarning -
+      //   totalDeduction;
+         const netSalary = earnedSalary;
 
-      //===================================
-      // PAYSLIP
-      //===================================
+      // ===================================
+      // PAYSLIP DATA
+      // ===================================
 
       const payrollData = {
-        totalWorkingDays,
+        // ---------------------------------
+        // OFFICE ATTENDANCE
+        // ---------------------------------
 
-        payablePresentDays,
+        totalWorkingDays:
+          roundAmount(
+            officeWorkingDays
+          ),
 
-        paidLeaveDays: paidLeaves,
+        // ---------------------------------
+        // FIXED SALARY DAYS
+        // ---------------------------------
 
-        holidayDays: holidayCount,
+        fixedSalaryDays:
+          fixedSalaryDays,
 
-        weekOffDays: weekOffCount,
+        // ---------------------------------
+        // PRESENT DAYS
+        // ---------------------------------
 
-        paidDays,
+        payablePresentDays:
+          roundAmount(
+            payablePresentDays
+          ),
 
-        absentDays,
+        // ---------------------------------
+        // ATTENDANCE WORKING DAYS
+        // ---------------------------------
+
+        attendanceWorkingDays:
+          roundAmount(
+            attendanceWorkingDays
+          ),
+
+        // ---------------------------------
+        // TOTAL PAID DAYS
+        // ---------------------------------
+
+        totalPaidDays:
+          roundAmount(
+            roundedTotalPaidDays
+          ),
+
+        // ---------------------------------
+        // FULL DAY
+        // ---------------------------------
+
+        fullDay:
+          fullday,
+
+        // ---------------------------------
+        // HALF DAY
+        // ---------------------------------
+
+        halfDay:
+          halfday,
+
+        halfDayValue:
+          roundAmount(
+            halfDayValue
+          ),
+
+        // ---------------------------------
+        // TOTAL LEAVE
+        // ---------------------------------
+
+        totalLeaveDays:
+          roundAmount(
+            totalLeaveDays
+          ),
+
+        // ---------------------------------
+        // PAID LEAVE
+        // ---------------------------------
+
+        paidLeaveDays:
+          roundAmount(
+            paidLeaves
+          ),
+
+        // ---------------------------------
+        // PAID LEAVE USED FOR ATTENDANCE
+        // ---------------------------------
+
+        paidLeaveUsedForAttendance:
+          roundAmount(
+            paidLeaveUsedForAttendance
+          ),
+
+        // ---------------------------------
+        // UNPAID LEAVE
+        // ---------------------------------
+
+        unpaidLeaveDays:
+          roundAmount(
+            unpaidLeaveDays
+          ),
+
+        // ---------------------------------
+        // ATTENDANCE GAP
+        // ---------------------------------
+
+        attendanceGap:
+          roundAmount(
+            attendanceGap
+          ),
+
+        // ---------------------------------
+        // ABSENT
+        // ---------------------------------
+
+        absentDays:
+          roundAmount(
+            absentDays
+          ),
+
+        // ---------------------------------
+        // HOLIDAY
+        // ---------------------------------
+
+        holidayDays:
+          holidayCount,
+
+        // ---------------------------------
+        // WEEK OFF
+        // ---------------------------------
+
+        weekOffDays:
+          weekOffCount,
+
+        // ---------------------------------
+        // SALARY DEDUCTION DAYS
+        // ---------------------------------
+
+        salaryDeductionDays:
+          roundAmount(
+            salaryDeductionDays
+          ),
+
+        // ---------------------------------
+        // FINAL SALARY PAYABLE DAYS
+        // ---------------------------------
+
+        paidDays:
+          roundAmount(
+            paidDays
+          ),
+
+        // ---------------------------------
+        // SALARY
+        // ---------------------------------
 
         monthlySalary:
-          roundAmount(monthlySalary),
-
-        earnedSalary:
-          roundAmount(earnedSalary),
-
-        travelAllowance:
-          roundAmount(travelAllowance),
+          roundAmount(
+            monthlySalary
+          ),
 
         perDaySalary:
-          roundAmount(perDaySalary),
+          roundAmount(
+            perDaySalary
+          ),
+
+        earnedSalary:
+          roundAmount(
+            earnedSalary
+          ),
+
+        // ---------------------------------
+        // EMPLOYEE DETAILS
+        // ---------------------------------
 
         designation:
           employee.designationId?.name ||
@@ -458,11 +1672,24 @@ const esiDeduction =
           employee.shiftId?.shiftName ||
           "",
 
+        // ---------------------------------
+        // EARNINGS
+        // ---------------------------------
+
         basicSalary:
-          roundAmount(basicSalary),
+          roundAmount(
+            basicSalary
+          ),
 
         hra:
-          roundAmount(hra),
+          roundAmount(
+            hra
+          ),
+
+        travelAllowance:
+          roundAmount(
+            travelAllowance
+          ),
 
         medicalAllowance:
           roundAmount(
@@ -489,6 +1716,10 @@ const esiDeduction =
             grossEarning
           ),
 
+        // ---------------------------------
+        // DEDUCTIONS
+        // ---------------------------------
+
         pfDeduction:
           roundAmount(
             pfDeduction
@@ -514,9 +1745,19 @@ const esiDeduction =
             totalDeduction
           ),
 
+        // ---------------------------------
+        // NET SALARY
+        // ---------------------------------
+
         netSalary:
-          roundAmount(netSalary),
+          roundAmount(
+            netSalary
+          ),
       };
+
+      // ===================================
+      // GENERATE PAYSLIP
+      // ===================================
 
       const payslipUrl =
         await generatePayslip({
@@ -525,6 +1766,10 @@ const esiDeduction =
           monthName,
           year,
         });
+
+      // ===================================
+      // ADD EMPLOYEE PAYROLL
+      // ===================================
 
       payrollEmployees.push({
         employeeId:
@@ -544,6 +1789,10 @@ const esiDeduction =
         payslipUrl,
       });
 
+      // ===================================
+      // TOTAL PAYROLL
+      // ===================================
+
       totalEarnings +=
         grossEarning;
 
@@ -553,6 +1802,10 @@ const esiDeduction =
       netPayroll +=
         netSalary;
     }
+
+    // ===================================
+    // CREATE PAYROLL
+    // ===================================
 
     const payroll =
       await Payroll.create({
@@ -600,10 +1853,16 @@ const esiDeduction =
           "Completed",
       });
 
+    // ===================================
+    // RESPONSE
+    // ===================================
+
     return res.status(201).json({
       success: true,
+
       message:
         "Payroll processed successfully",
+
       data: payroll,
     });
   } catch (error) {
@@ -611,10 +1870,19 @@ const esiDeduction =
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+
+      message:
+        error.message,
     });
   }
 };
+
+
+
+
+
+
+
 exports.getAllPayrolls = async (req, res) => {
   try {
     const filter = {

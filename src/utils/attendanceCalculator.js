@@ -24,25 +24,152 @@ exports.minutesDiff = (start, end) => {
    Calculate Attendance
 ========================================================== */
 
+// exports.calculateAttendance = (attendance) => {
+//   if (!attendance) return attendance;
+
+//   let actualBreakMinutes = 0;
+//   let requiredMinutes = FULL_DAY_MINUTES;
+
+//     const day = new Date(attendance.attendanceDate)
+//   .toLocaleDateString("en-US", { weekday: "long" });
+
+//   if (day === "Saturday") {
+//     requiredMinutes = 450; // 7.5 hours after 60 min break
+//   }
+
+//   const halfDayMinutes = requiredMinutes / 2;
+//   /* =========================================
+//      Calculate Break Minutes
+//   ========================================= */
+
+//   if (attendance.breaks && attendance.breaks.length > 0) {
+//     attendance.breaks.forEach((item) => {
+//       if (item.minutes && item.minutes > 0) {
+//         actualBreakMinutes += item.minutes;
+//       } else if (item.breakIn && item.breakOut) {
+//         actualBreakMinutes += exports.minutesDiff(
+//           item.breakIn,
+//           item.breakOut
+//         );
+//       }
+//     });
+//   }
+
+//   attendance.totalBreakMinutes = Math.max(
+//     DEFAULT_BREAK_MINUTES,
+//     actualBreakMinutes
+//   );
+
+//   attendance.extraBreakMinutes =
+//     actualBreakMinutes > DEFAULT_BREAK_MINUTES
+//       ? actualBreakMinutes - DEFAULT_BREAK_MINUTES
+//       : 0;
+
+//   /* =========================================
+//      Working Minutes
+//   ========================================= */
+
+//   attendance.workingMinutes = 0;
+//   attendance.overtimeMinutes = 0;
+
+//   if (attendance.punchIn && attendance.punchOut) {
+//     let totalMinutes = exports.minutesDiff(
+//       attendance.punchIn,
+//       attendance.punchOut
+//     );
+
+//     if(attendance?.permissionApproved && attendance?.permissionMinutes) {
+//       totalMinutes += attendance.permissionMinutes;
+//     }
+
+//     let breakMinutes = actualBreakMinutes;
+
+//     // Apply default break only for employees
+//     // who worked a full-day duration.
+//     if (totalMinutes >= BREAK_ELIGIBLE_MINUTES && actualBreakMinutes === 0) {
+//       breakMinutes = DEFAULT_BREAK_MINUTES;
+//     }
+
+//     // Store ACTUAL break taken/default break
+// attendance.totalBreakMinutes = breakMinutes;
+
+// // Extra break is only the amount above the allowed 60 minutes
+// attendance.extraBreakMinutes = Math.max(
+//   0,
+//   breakMinutes - DEFAULT_BREAK_MINUTES
+// );
+
+//     attendance.workingMinutes = Math.max(
+//       0,
+//       totalMinutes - breakMinutes
+//     );
+
+//     attendance.overtimeMinutes =
+//       attendance.workingMinutes > requiredMinutes
+//         ? attendance.workingMinutes - requiredMinutes
+//         : 0;
+
+//     /* =========================================
+//        Status & Session
+//     ========================================= */
+
+//     if (attendance.workingMinutes >= requiredMinutes) {
+//       attendance.status = "present";
+//       attendance.session = "full_day";
+//     } else if (attendance.workingMinutes >= halfDayMinutes) {
+//       attendance.status = "half_day";
+//       attendance.session = "half_day";
+//     } else {
+//       attendance.status = "absent";
+//       attendance.session = "absent";
+//     }
+
+//     /* =========================================
+//        Debug Logs
+//     ========================================= */
+
+//     console.log("========================================");
+//     console.log("Attendance Calculation");
+//     console.log("----------------------------------------");
+//     console.log("Punch In          :", attendance.punchIn);
+//     console.log("Punch Out         :", attendance.punchOut);
+//     console.log("Total Minutes     :", totalMinutes);
+//     console.log("Break Minutes     :", attendance.totalBreakMinutes);
+//     console.log("Extra Break       :", attendance.extraBreakMinutes);
+//     console.log("Working Minutes   :", attendance.workingMinutes);
+//     console.log("Overtime Minutes  :", attendance.overtimeMinutes);
+//     console.log("Status            :", attendance.status);
+//     console.log("Session           :", attendance.session);
+//     console.log("========================================");
+//   } else {
+//     console.log("Punch In or Punch Out missing.");
+//   }
+
+//   return attendance;
+// };
+
 exports.calculateAttendance = (attendance) => {
   if (!attendance) return attendance;
 
   let actualBreakMinutes = 0;
   let requiredMinutes = FULL_DAY_MINUTES;
 
-    const day = new Date(attendance.attendanceDate)
-  .toLocaleDateString("en-US", { weekday: "long" });
+  const day = new Date(attendance.attendanceDate)
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+    });
 
   if (day === "Saturday") {
-    requiredMinutes = 450; // 7.5 hours after 60 min break
+    requiredMinutes = 450;
   }
 
   const halfDayMinutes = requiredMinutes / 2;
-  /* =========================================
-     Calculate Break Minutes
-  ========================================= */
 
-  if (attendance.breaks && attendance.breaks.length > 0) {
+  // =========================================
+  // ACTUAL BREAK
+  // =========================================
+
+  if (attendance.breaks?.length > 0) {
     attendance.breaks.forEach((item) => {
       if (item.minutes && item.minutes > 0) {
         actualBreakMinutes += item.minutes;
@@ -55,85 +182,123 @@ exports.calculateAttendance = (attendance) => {
     });
   }
 
-  attendance.totalBreakMinutes = Math.max(
-    DEFAULT_BREAK_MINUTES,
-    actualBreakMinutes
-  );
-
-  attendance.extraBreakMinutes =
-    actualBreakMinutes > DEFAULT_BREAK_MINUTES
-      ? actualBreakMinutes - DEFAULT_BREAK_MINUTES
-      : 0;
-
-  /* =========================================
-     Working Minutes
-  ========================================= */
+  // =========================================
+  // WORKING TIME
+  // =========================================
 
   attendance.workingMinutes = 0;
   attendance.overtimeMinutes = 0;
 
   if (attendance.punchIn && attendance.punchOut) {
-    let totalMinutes = exports.minutesDiff(
+
+    const punchMinutes = exports.minutesDiff(
       attendance.punchIn,
       attendance.punchOut
     );
 
-    if(attendance?.permissionApproved && attendance?.permissionMinutes) {
-      totalMinutes += attendance.permissionMinutes;
-    }
+    // =========================================
+    // PERMISSION
+    // =========================================
+
+    const permissionMinutes =
+      attendance.permissionApproved &&
+      attendance.permissionMinutes
+        ? Number(attendance.permissionMinutes)
+        : 0;
+
+    // Permission compensates for approved missing time
+    const effectiveMinutes =
+      punchMinutes + permissionMinutes;
+
+    // =========================================
+    // BREAK
+    // =========================================
 
     let breakMinutes = actualBreakMinutes;
 
-    // Apply default break only for employees
-    // who worked a full-day duration.
-    if (totalMinutes >= BREAK_ELIGIBLE_MINUTES && actualBreakMinutes === 0) {
+    // Apply default 60 min break only when:
+    // 1. No actual break recorded
+    // 2. Employee worked enough time to qualify
+    // 3. Permission does not already cover the missing time
+    if (
+      actualBreakMinutes === 0 &&
+      effectiveMinutes >= BREAK_ELIGIBLE_MINUTES
+    ) {
       breakMinutes = DEFAULT_BREAK_MINUTES;
     }
 
-    attendance.totalBreakMinutes = breakMinutes > DEFAULT_BREAK_MINUTES ? breakMinutes : DEFAULT_BREAK_MINUTES;
+    // =========================================
+    // BREAK VALUES
+    // =========================================
+
+    attendance.totalBreakMinutes = breakMinutes;
+
+    attendance.extraBreakMinutes = Math.max(
+      0,
+      breakMinutes - DEFAULT_BREAK_MINUTES
+    );
+
+    // =========================================
+    // WORKING MINUTES
+    // =========================================
 
     attendance.workingMinutes = Math.max(
       0,
-      totalMinutes - attendance.totalBreakMinutes
+      effectiveMinutes - breakMinutes
     );
+
+    // =========================================
+    // OVERTIME
+    // =========================================
 
     attendance.overtimeMinutes =
       attendance.workingMinutes > requiredMinutes
         ? attendance.workingMinutes - requiredMinutes
         : 0;
 
-    /* =========================================
-       Status & Session
-    ========================================= */
+    // =========================================
+    // STATUS
+    // =========================================
 
     if (attendance.workingMinutes >= requiredMinutes) {
+
       attendance.status = "present";
       attendance.session = "full_day";
+
     } else if (attendance.workingMinutes >= halfDayMinutes) {
+
       attendance.status = "half_day";
       attendance.session = "half_day";
+
     } else {
+
       attendance.status = "absent";
       attendance.session = "absent";
     }
 
-    /* =========================================
-       Debug Logs
-    ========================================= */
+    // =========================================
+    // DEBUG
+    // =========================================
 
     console.log("========================================");
     console.log("Attendance Calculation");
     console.log("----------------------------------------");
-    console.log("Punch In          :", attendance.punchIn);
-    console.log("Punch Out         :", attendance.punchOut);
-    console.log("Total Minutes     :", totalMinutes);
-    console.log("Break Minutes     :", attendance.totalBreakMinutes);
-    console.log("Extra Break       :", attendance.extraBreakMinutes);
-    console.log("Working Minutes   :", attendance.workingMinutes);
-    console.log("Overtime Minutes  :", attendance.overtimeMinutes);
-    console.log("Status            :", attendance.status);
-    console.log("Session           :", attendance.session);
+    console.log("Punch In              :", attendance.punchIn);
+    console.log("Punch Out             :", attendance.punchOut);
+    console.log("Punch Minutes         :", punchMinutes);
+    console.log("Permission Approved   :", attendance.permissionApproved);
+    console.log("Permission Minutes    :", permissionMinutes);
+    console.log("Effective Minutes     :", effectiveMinutes);
+    console.log("Actual Break Minutes  :", actualBreakMinutes);
+    console.log("Total Break Minutes   :", attendance.totalBreakMinutes);
+    console.log("Extra Break Minutes   :", attendance.extraBreakMinutes);
+    console.log("Working Minutes       :", attendance.workingMinutes);
+    console.log("Overtime Minutes      :", attendance.overtimeMinutes);
+    console.log("Required Minutes      :", requiredMinutes);
+    console.log("Status                :", attendance.status);
+    console.log("Session               :", attendance.session);
     console.log("========================================");
+
   } else {
     console.log("Punch In or Punch Out missing.");
   }
